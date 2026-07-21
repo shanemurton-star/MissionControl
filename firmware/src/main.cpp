@@ -2,6 +2,7 @@
 
 #include "services/WiFiService.h"
 #include "services/ClockService.h"
+#include "services/StatusService.h"
 
 #include "screens/ScreenManager.h"
 #include "screens/HomeScreen.h"
@@ -9,6 +10,8 @@
 
 WiFiService wifiService;
 ClockService clockService;
+
+StatusService statusService;
 
 ScreenManager screenManager;
 HomeScreen homeScreen;
@@ -26,17 +29,39 @@ void setup()
     Serial.println("============================");
 
 
+    statusService.begin();
+
     wifiService.begin();
 
 
     if (wifiService.isConnected())
     {
+        statusService.setStatus(
+            "WIFI",
+            "CONNECTED"
+        );
+
         clockService.begin();
+
+        statusService.setStatus(
+            "TIME",
+            "SYNCED"
+        );
 
         Serial.println("Clock service started");
     }
     else
     {
+        statusService.setStatus(
+            "WIFI",
+            "OFFLINE"
+        );
+
+        statusService.setStatus(
+            "TIME",
+            "WAITING"
+        );
+
         Serial.println("Clock service waiting for WiFi");
     }
 
@@ -60,6 +85,9 @@ void loop()
     {
         Serial.println("Waiting for network...");
     }
+
+
+    statusService.printStatus();
 
 
     screenManager.update();
