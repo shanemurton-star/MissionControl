@@ -1,4 +1,8 @@
 #include <Arduino.h>
+#include "services/ClockService.h"
+
+ClockService clockService;
+
 
 void setup()
 {
@@ -7,16 +11,23 @@ void setup()
     delay(1000);
 
     Serial.println();
-    Serial.println("================================");
-    Serial.println("      MISSION CONTROL");
-    Serial.println("      Version 0.1.0");
-    Serial.println("================================");
-    Serial.println("System initialized");
+    Serial.println("============================");
+    Serial.println("   MISSION CONTROL");
+    Serial.println("============================");
+
+    clockService.begin();
 }
+
 
 void loop()
 {
-    Serial.println("Systems nominal");
+    Serial.print("LOCAL: ");
+    Serial.println(clockService.getLocalTime());
 
-    delay(5000);
+    Serial.print("UTC:   ");
+    Serial.println(clockService.getUTCTime());
+
+    Serial.println();
+
+    delay(1000);
 }

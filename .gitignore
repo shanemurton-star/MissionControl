@@ -1,0 +1,21 @@
+# PlatformIO
+.pio/
+**/.pio/
+
+# VS Code
+.vscode/settings.json
+.vscode/*.log
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Build files
+*.o
+*.elf
+*.bin
+*.hex
+
+# Python
+__pycache__/
+*.pyc
