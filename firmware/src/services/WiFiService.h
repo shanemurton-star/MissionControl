@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include "../config/secrets.h"
 
 class WiFiService
 {
@@ -13,6 +14,6 @@ public:
 
 private:
 
-    const char* ssid = "";
-    const char* password = "";
+const char* ssid = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
 };

@@ -1,0 +1,6 @@
+#pragma once
+
+// DO NOT COMMIT THIS FILE TO GITHUB
+
+#define WIFI_SSID "Murton"
+#define WIFI_PASSWORD "9E0183F2F2"
