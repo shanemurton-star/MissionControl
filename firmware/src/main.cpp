@@ -3,6 +3,7 @@
 #include "services/WiFiService.h"
 #include "services/ClockService.h"
 #include "services/StatusService.h"
+#include "services/WeatherService.h"
 
 #include "screens/ScreenManager.h"
 #include "screens/HomeScreen.h"
@@ -12,6 +13,7 @@ WiFiService wifiService;
 ClockService clockService;
 
 StatusService statusService;
+WeatherService weatherService;
 
 ScreenManager screenManager;
 HomeScreen homeScreen;
@@ -23,7 +25,6 @@ void setup()
 
     delay(1000);
 
-
     Serial.println();
     Serial.println("============================");
     Serial.println("       MISSION CONTROL");
@@ -31,6 +32,8 @@ void setup()
 
 
     statusService.begin();
+
+    weatherService.begin();
 
 
     wifiService.begin();
@@ -76,6 +79,11 @@ void setup()
 
 void loop()
 {
+    weatherService.update(
+        statusService
+    );
+
+
     homeScreen.draw(
         clockService,
         statusService

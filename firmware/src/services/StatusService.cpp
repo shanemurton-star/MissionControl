@@ -22,6 +22,10 @@ void StatusService::setStatus(
     {
         timeStatus = value;
     }
+    else if (name == "WEATHER")
+    {
+        weatherStatus = value;
+    }
     else if (name == "SYSTEM")
     {
         systemStatus = value;
@@ -38,15 +42,24 @@ String StatusService::getStatus(
         return wifiStatus;
     }
 
+
     if (name == "TIME")
     {
         return timeStatus;
     }
 
+
+    if (name == "WEATHER")
+    {
+        return weatherStatus;
+    }
+
+
     if (name == "SYSTEM")
     {
         return systemStatus;
     }
+
 
     return "UNKNOWN";
 }
@@ -58,14 +71,22 @@ void StatusService::printStatus()
     Serial.println("----------------------------");
     Serial.println("MISSION STATUS");
 
-    Serial.print("WIFI:   ");
+
+    Serial.print("WIFI:    ");
     Serial.println(wifiStatus);
 
-    Serial.print("TIME:   ");
+
+    Serial.print("TIME:    ");
     Serial.println(timeStatus);
 
-    Serial.print("SYSTEM: ");
+
+    Serial.print("WEATHER: ");
+    Serial.println(weatherStatus);
+
+
+    Serial.print("SYSTEM:  ");
     Serial.println(systemStatus);
+
 
     Serial.println("----------------------------");
 }

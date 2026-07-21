@@ -26,4 +26,5 @@ private:
     String wifiStatus = "UNKNOWN";
     String timeStatus = "UNKNOWN";
     String systemStatus = "STARTING";
+    String weatherStatus = "UNKNOWN";
 };
