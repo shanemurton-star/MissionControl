@@ -23,6 +23,7 @@ void setup()
 
     delay(1000);
 
+
     Serial.println();
     Serial.println("============================");
     Serial.println("       MISSION CONTROL");
@@ -30,6 +31,7 @@ void setup()
 
 
     statusService.begin();
+
 
     wifiService.begin();
 
@@ -41,14 +43,14 @@ void setup()
             "CONNECTED"
         );
 
+
         clockService.begin();
+
 
         statusService.setStatus(
             "TIME",
             "SYNCED"
         );
-
-        Serial.println("Clock service started");
     }
     else
     {
@@ -57,16 +59,16 @@ void setup()
             "OFFLINE"
         );
 
+
         statusService.setStatus(
             "TIME",
             "WAITING"
         );
-
-        Serial.println("Clock service waiting for WiFi");
     }
 
 
     screenManager.begin();
+
 
     Serial.println("Mission Control ready");
 }
@@ -74,20 +76,10 @@ void setup()
 
 void loop()
 {
-    if (wifiService.isConnected())
-    {
-        homeScreen.draw(
-            clockService,
-            wifiService
-        );
-    }
-    else
-    {
-        Serial.println("Waiting for network...");
-    }
-
-
-    statusService.printStatus();
+    homeScreen.draw(
+        clockService,
+        statusService
+    );
 
 
     screenManager.update();
