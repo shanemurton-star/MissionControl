@@ -13,36 +13,57 @@ void HomeScreen::draw(
     Serial.println("============================");
 
 
-    Serial.print("LOCAL:  ");
-    Serial.println(clock.getLocalTime());
+    Serial.println();
+    Serial.println("TIME");
+
+    Serial.print("LOCAL: ");
+    Serial.println(
+        clock.getLocalTime()
+    );
 
 
-    Serial.print("UTC:    ");
-    Serial.println(clock.getUTCTime());
+    Serial.print("UTC:   ");
+    Serial.println(
+        clock.getUTCTime()
+    );
 
 
     Serial.println();
+    Serial.println("SYSTEMS");
 
-    Serial.println("SYSTEM STATUS");
 
-
-    Serial.print("WIFI:   ");
+    Serial.print("WIFI:    ");
     Serial.println(
         status.getStatus("WIFI")
     );
 
 
-    Serial.print("TIME:   ");
+    Serial.print("TIME:    ");
     Serial.println(
         status.getStatus("TIME")
     );
 
 
-    Serial.print("SYSTEM: ");
+    Serial.println();
+    Serial.println("ENVIRONMENT");
+
+
+    Serial.print("WEATHER: ");
+    Serial.println(
+        status.getStatus("WEATHER")
+    );
+
+
+    Serial.println();
+    Serial.println("STATUS");
+
+
+    Serial.print("SYSTEM:  ");
     Serial.println(
         status.getStatus("SYSTEM")
     );
 
 
+    Serial.println();
     Serial.println("============================");
 }

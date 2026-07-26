@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include "../config/Settings.h"
 #include "../config/secrets.h"
 
 class WiFiService
