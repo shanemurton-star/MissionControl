@@ -1,97 +1,33 @@
 #include <Arduino.h>
+#include "hardware/DisplayService.h"
 
-#include "services/WiFiService.h"
-#include "services/ClockService.h"
-#include "services/StatusService.h"
-#include "services/WeatherService.h"
-
-#include "screens/ScreenManager.h"
-#include "screens/HomeScreen.h"
-
-
-WiFiService wifiService;
-ClockService clockService;
-
-StatusService statusService;
-WeatherService weatherService;
-
-ScreenManager screenManager;
-HomeScreen homeScreen;
-
+// Hardware services
+DisplayService displayService;
 
 void setup()
 {
     Serial.begin(115200);
-
-    delay(1000);
+    delay(500);
 
     Serial.println();
-    Serial.println("============================");
-    Serial.println("       MISSION CONTROL");
-    Serial.println("============================");
+    Serial.println("==============================");
+    Serial.println("Mission Control starting...");
+    Serial.println("==============================");
 
-
-    statusService.begin();
-
-    weatherService.begin();
-
-
-    wifiService.begin();
-
-
-    if (wifiService.isConnected())
+    if (displayService.begin())
     {
-        statusService.setStatus(
-            "WIFI",
-            "CONNECTED"
-        );
-
-
-        clockService.begin();
-
-
-        statusService.setStatus(
-            "TIME",
-            "SYNCED"
-        );
+        Serial.println("Display service initialized.");
     }
     else
     {
-        statusService.setStatus(
-            "WIFI",
-            "OFFLINE"
-        );
-
-
-        statusService.setStatus(
-            "TIME",
-            "WAITING"
-        );
+        Serial.println("ERROR: Display service failed to initialize.");
     }
-
-
-    screenManager.begin();
-
-
-    Serial.println("Mission Control ready");
 }
-
 
 void loop()
 {
-    weatherService.update(
-        statusService
-    );
+    displayService.update();
 
-
-    homeScreen.draw(
-        clockService,
-        statusService
-    );
-
-
-    screenManager.update();
-
-
-    delay(1000);
+    // Brief delay prevents the loop from monopolizing the processor.
+    delay(5);
 }
