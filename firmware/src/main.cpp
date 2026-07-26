@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include "hardware/DisplayService.h"
 
-// Hardware services
 DisplayService displayService;
 
 void setup()
@@ -27,7 +26,5 @@ void setup()
 void loop()
 {
     displayService.update();
-
-    // Brief delay prevents the loop from monopolizing the processor.
     delay(5);
 }
