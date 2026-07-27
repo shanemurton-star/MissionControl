@@ -7,9 +7,15 @@ class ClockService
 public:
     void begin();
 
+    bool isSynchronized();
+
     String getLocalTime();
     String getUTCTime();
 
+    String getLocalDate();
+    String getUTCDate();
+
 private:
-    String formatTime();
+    bool getLocalTimeInfo(struct tm& timeInfo);
+    bool getUTCTimeInfo(struct tm& timeInfo);
 };

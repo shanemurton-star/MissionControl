@@ -1,29 +1,33 @@
 #pragma once
 
-#include <Arduino.h>
+#include <lvgl.h>
 
+#include "DashboardScreen.h"
+#include "StartupScreen.h"
+#include "WeatherScreen.h"
 
-enum ScreenType
-{
-    HOME,
-    WEATHER,
-    RADIO,
-    SPACE,
-    CALENDAR
-};
-
+#include "../services/ClockService.h"
+#include "../services/WeatherService.h"
 
 class ScreenManager
 {
 public:
+    void begin(
+        ClockService& clockService,
+        WeatherService& weatherService);
 
-    void begin();
-
-    void show(ScreenType screen);
-
-    void update();
+    void showStartupScreen();
+    void showDashboardScreen();
+    void showWeatherScreen();
+    WeatherScreen& getWeatherScreen();
 
 private:
+    static void startupTimerCallback(
+        lv_timer_t* timer);
 
-    ScreenType currentScreen = HOME;
+    StartupScreen startupScreen;
+    DashboardScreen dashboardScreen;
+    WeatherScreen weatherScreen;
+
+    lv_timer_t* startupTimer = nullptr;
 };

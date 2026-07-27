@@ -1,44 +1,63 @@
 #include "ScreenManager.h"
 
-
-void ScreenManager::begin()
+void ScreenManager::begin(
+    ClockService& clockService,
+    WeatherService& weatherService)
 {
-    Serial.println("Screen Manager Started");
+    startupScreen.begin();
+
+    dashboardScreen.begin(
+        clockService,
+        weatherService);
+    
+    weatherScreen.begin(
+        clockService,
+        weatherService);
+
+    showStartupScreen();
+
+    startupTimer = lv_timer_create(
+        startupTimerCallback,
+        2000,
+        this);
+
+    lv_timer_set_repeat_count(
+        startupTimer,
+        1);
 }
 
-
-void ScreenManager::show(ScreenType screen)
+void ScreenManager::showStartupScreen()
 {
-    currentScreen = screen;
+    startupScreen.show();
+}
 
-    Serial.print("Switching to screen: ");
+void ScreenManager::showDashboardScreen()
+{
+    dashboardScreen.show();
+}
 
-    switch(screen)
+void ScreenManager::showWeatherScreen()
+{
+    weatherScreen.show();
+}
+
+WeatherScreen& ScreenManager::getWeatherScreen()
+{
+    return weatherScreen;
+}
+
+void ScreenManager::startupTimerCallback(
+    lv_timer_t* timer)
+{
+    ScreenManager* manager =
+        static_cast<ScreenManager*>(
+            timer->user_data);
+
+    if (manager == nullptr)
     {
-        case HOME:
-            Serial.println("HOME");
-            break;
-
-        case WEATHER:
-            Serial.println("WEATHER");
-            break;
-
-        case RADIO:
-            Serial.println("RADIO");
-            break;
-
-        case SPACE:
-            Serial.println("SPACE");
-            break;
-
-        case CALENDAR:
-            Serial.println("CALENDAR");
-            break;
+        return;
     }
-}
 
-
-void ScreenManager::update()
-{
-    // Later this will call LVGL rendering
+    manager->showDashboardScreen();
+    manager->startupTimer = nullptr;
 }

@@ -7,6 +7,8 @@
 #include <lgfx/v1/platforms/esp32s3/Panel_RGB.hpp>
 #include <lgfx/v1/platforms/esp32s3/Bus_RGB.hpp>
 
+#include "../screens/ScreenManager.h"
+
 constexpr uint16_t SCREEN_WIDTH = 800;
 constexpr uint16_t SCREEN_HEIGHT = 480;
 
@@ -167,137 +169,28 @@ namespace
         }
 
         if (touch_touched())
-        {
-            data->state = LV_INDEV_STATE_PR;
-            data->point.x = touch_last_x;
-            data->point.y = touch_last_y;
-        }
+        if (touch_touched())
+{
+    data->state = LV_INDEV_STATE_PR;
+    data->point.x = touch_last_x;
+    data->point.y = touch_last_y;
+}
         else if (touch_released())
         {
             data->state = LV_INDEV_STATE_REL;
         }
     }
-
-    void createStartupScreen()
-    {
-        lv_obj_t* screen = lv_obj_create(nullptr);
-
-        lv_obj_set_style_bg_color(
-            screen,
-            lv_color_hex(0x07111F),
-            LV_PART_MAIN);
-
-        lv_obj_set_style_bg_opa(
-            screen,
-            LV_OPA_COVER,
-            LV_PART_MAIN);
-
-        lv_obj_clear_flag(
-            screen,
-            LV_OBJ_FLAG_SCROLLABLE);
-
-        lv_obj_t* title = lv_label_create(screen);
-
-        lv_label_set_text(
-            title,
-            "MISSION CONTROL");
-
-        lv_obj_set_style_text_color(
-            title,
-            lv_color_hex(0xFFFFFF),
-            LV_PART_MAIN);
-
-        lv_obj_set_style_text_font(
-            title,
-            &lv_font_montserrat_14,
-            LV_PART_MAIN);
-
-        lv_obj_align(
-            title,
-            LV_ALIGN_CENTER,
-            0,
-            -70);
-
-        lv_obj_t* subtitle = lv_label_create(screen);
-
-        lv_label_set_text(
-            subtitle,
-            "Initializing...");
-
-        lv_obj_set_style_text_color(
-            subtitle,
-            lv_color_hex(0x8EA9C1),
-            LV_PART_MAIN);
-
-        lv_obj_set_style_text_font(
-            subtitle,
-            &lv_font_montserrat_14,
-            LV_PART_MAIN);
-
-        lv_obj_align(
-            subtitle,
-            LV_ALIGN_CENTER,
-            0,
-            0);
-
-        lv_obj_t* status = lv_label_create(screen);
-
-        lv_label_set_text(
-            status,
-            "Display ready");
-
-        lv_obj_set_style_text_color(
-            status,
-            lv_color_hex(0x57D68D),
-            LV_PART_MAIN);
-
-        lv_obj_set_style_text_font(
-            status,
-            &lv_font_montserrat_14,
-            LV_PART_MAIN);
-
-        lv_obj_align(
-            status,
-            LV_ALIGN_CENTER,
-            0,
-            55);
-
-        lv_obj_t* version = lv_label_create(screen);
-
-        lv_label_set_text(
-            version,
-            "Firmware v0.1");
-
-        lv_obj_set_style_text_color(
-            version,
-            lv_color_hex(0x60758A),
-            LV_PART_MAIN);
-
-        lv_obj_set_style_text_font(
-            version,
-            &lv_font_montserrat_14,
-            LV_PART_MAIN);
-
-        lv_obj_align(
-            version,
-            LV_ALIGN_BOTTOM_MID,
-            0,
-            -25);
-
-        lv_scr_load(screen);
-    }
 }
 
-bool DisplayService::begin()
+bool DisplayService::begin(
+    ClockService& clockService,
+    WeatherService& weatherService)
 {
     Serial.println("Initializing CrowPanel display...");
 
     // Enable the CrowPanel hardware.
     pinMode(BOARD_ENABLE_PIN, OUTPUT);
     digitalWrite(BOARD_ENABLE_PIN, LOW);
-
-    // Touch controller uses GPIO 19 and GPIO 20.
-    Wire.begin(19, 20);
 
     // Initialize the RGB display.
     lcd.begin();
@@ -345,7 +238,10 @@ bool DisplayService::begin()
         BACKLIGHT_CHANNEL,
         BACKLIGHT_BRIGHTNESS);
 
-    createStartupScreen();
+    
+    screenManager.begin(
+    clockService,
+    weatherService);
 
     lastTickMillis = millis();
 
@@ -360,6 +256,7 @@ bool DisplayService::begin()
 void DisplayService::update()
 {
     const uint32_t currentMillis = millis();
+
     const uint32_t elapsedMillis =
         currentMillis - lastTickMillis;
 
