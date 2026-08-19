@@ -151,6 +151,8 @@ void SettingsService::loadDefaults()
     currentSettings.locationName =
         LOCATION_NAME;
 
+    currentSettings.postalCode = "";
+
     currentSettings.latitude =
         DEFAULT_LATITUDE;
 
@@ -221,6 +223,13 @@ void SettingsService::loadFromStorage()
             "callsign",
             currentSettings.callsign);
 
+    // Early builds stored an empty callsign. Treat that as an unset value
+    // so the station identity is always visible until the user changes it.
+    if (currentSettings.callsign.isEmpty())
+    {
+        currentSettings.callsign = DEFAULT_CALLSIGN;
+    }
+
     currentSettings.gridSquare =
         preferences.getString(
             "grid",
@@ -240,6 +249,11 @@ void SettingsService::loadFromStorage()
         preferences.getString(
             "location",
             currentSettings.locationName);
+
+    currentSettings.postalCode =
+        preferences.getString(
+            "postal",
+            currentSettings.postalCode);
 
     currentSettings.latitude =
         preferences.getDouble(
@@ -343,6 +357,10 @@ void SettingsService::saveToStorage()
     preferences.putString(
         "location",
         currentSettings.locationName);
+
+    preferences.putString(
+        "postal",
+        currentSettings.postalCode);
 
     preferences.putDouble(
         "latitude",

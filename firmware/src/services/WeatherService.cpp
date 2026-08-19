@@ -70,9 +70,16 @@ void WeatherService::begin(
         1000UL;
 
     currentWeather = WeatherData();
+    forecast = ForecastData();
 
     stationsUrl = "";
     latestObservationUrl = "";
+    forecastUrl = "";
+    alertsUrl =
+        String("https://api.weather.gov/alerts/active?point=") +
+        String(latitude, 4) +
+        "," +
+        String(longitude, 4);
     lastError = "";
 
     nextActionMs = 0;
@@ -145,6 +152,27 @@ void WeatherService::update()
             break;
         }
 
+        case State::FetchForecast:
+        {
+            updating = true;
+            fetchForecast();
+            break;
+        }
+
+        case State::FetchAlerts:
+        {
+            updating = true;
+            fetchAlerts();
+            break;
+        }
+
+        case State::FetchAirQuality:
+        {
+            updating = true;
+            fetchAirQuality();
+            break;
+        }
+
         case State::Ready:
         {
             updating = false;
@@ -200,6 +228,12 @@ const WeatherData&
 WeatherService::getCurrentWeather() const
 {
     return currentWeather;
+}
+
+const ForecastData&
+WeatherService::getForecast() const
+{
+    return forecast;
 }
 
 const String&
@@ -369,6 +403,9 @@ void WeatherService::resolvePoint()
                 ["observationStations"] |
         "";
 
+    const char* forecastEndpoint =
+        document["properties"]["forecast"] | "";
+
     if (stationEndpoint[0] == '\0')
     {
         setError(
@@ -381,6 +418,9 @@ void WeatherService::resolvePoint()
 
     stationsUrl =
         String(stationEndpoint);
+
+    forecastUrl =
+        String(forecastEndpoint);
 
     lastError = "";
     state = State::ResolveStation;
@@ -682,11 +722,8 @@ void WeatherService::fetchObservation()
     lastError = "";
     updating = false;
 
-    state = State::Ready;
-
-    nextActionMs =
-        millis() +
-        refreshIntervalMs;
+    state = State::FetchForecast;
+    nextActionMs = 0;
 
     Serial.println(
         "[WeatherService] Weather updated");
@@ -714,6 +751,185 @@ void WeatherService::fetchObservation()
 
     Serial.println(
         getWind());
+}
+
+void WeatherService::fetchForecast()
+{
+    if (forecastUrl.isEmpty())
+    {
+        setError("NWS point response did not include a forecast URL");
+        scheduleRetry();
+        return;
+    }
+
+    String response;
+
+    if (!performRequest(forecastUrl, response))
+    {
+        scheduleRetry();
+        return;
+    }
+
+    JsonDocument document;
+    const DeserializationError error =
+        deserializeJson(document, response);
+
+    if (error)
+    {
+        setError(
+            String("Forecast JSON error: ") +
+            error.c_str());
+        scheduleRetry();
+        return;
+    }
+
+    JsonArrayConst periods =
+        document["properties"]["periods"]
+            .as<JsonArrayConst>();
+
+    if (periods.isNull() || periods.size() == 0)
+    {
+        setError("NWS returned no forecast periods");
+        scheduleRetry();
+        return;
+    }
+
+    ForecastData newForecast;
+
+    for (JsonObjectConst period : periods)
+    {
+        const bool daytime =
+            period["isDaytime"] | false;
+        const int temperature =
+            period["temperature"] | 0;
+
+        if (daytime && !newForecast.hasHigh)
+        {
+            newForecast.highF = temperature;
+            newForecast.hasHigh = true;
+        }
+        else if (!daytime && !newForecast.hasLow)
+        {
+            newForecast.lowF = temperature;
+            newForecast.hasLow = true;
+        }
+
+        if (newForecast.periodCount <
+            ForecastData::MAX_PERIODS)
+        {
+            ForecastPeriod& destination =
+                newForecast.periods[
+                    newForecast.periodCount++];
+
+            destination.name =
+                String(period["name"] | "--");
+            destination.shortForecast =
+                String(period["shortForecast"] | "--");
+            destination.temperatureF = temperature;
+            destination.daytime = daytime;
+        }
+
+        if (newForecast.hasHigh &&
+            newForecast.hasLow &&
+            newForecast.periodCount >=
+                ForecastData::MAX_PERIODS)
+        {
+            break;
+        }
+    }
+
+    newForecast.valid =
+        newForecast.periodCount > 0;
+
+    newForecast.alertCount = forecast.alertCount;
+    newForecast.primaryAlert = forecast.primaryAlert;
+    forecast = newForecast;
+
+    lastError = "";
+    state = State::FetchAlerts;
+}
+
+void WeatherService::fetchAlerts()
+{
+    String response;
+
+    if (!performRequest(alertsUrl, response))
+    {
+        scheduleRetry();
+        return;
+    }
+
+    JsonDocument document;
+    const DeserializationError error =
+        deserializeJson(document, response);
+
+    if (error)
+    {
+        setError(
+            String("Alerts JSON error: ") +
+            error.c_str());
+        scheduleRetry();
+        return;
+    }
+
+    JsonArrayConst features =
+        document["features"].as<JsonArrayConst>();
+
+    forecast.alertCount =
+        features.isNull() ? 0 : features.size();
+    forecast.primaryAlert = "";
+
+    if (!features.isNull() && features.size() > 0)
+    {
+        const char* event =
+            features[0]["properties"]["event"] | "";
+        forecast.primaryAlert = String(event);
+    }
+
+    lastError = "";
+    state = State::FetchAirQuality;
+}
+
+void WeatherService::fetchAirQuality()
+{
+    const String url =
+        String("https://air-quality-api.open-meteo.com/v1/air-quality?latitude=") +
+        String(latitude, 4) + "&longitude=" + String(longitude, 4) +
+        "&current=us_aqi,pm2_5,pm10";
+
+    String response;
+    currentWeather.airQualityValid = false;
+    if (performRequest(url, response))
+    {
+        JsonDocument document;
+        const DeserializationError error = deserializeJson(document, response);
+        if (!error)
+        {
+            JsonObjectConst current = document["current"].as<JsonObjectConst>();
+            if (!current.isNull() && !current["us_aqi"].isNull())
+            {
+                currentWeather.usAqi = static_cast<int16_t>(current["us_aqi"].as<float>() + 0.5f);
+                currentWeather.pm25 = current["pm2_5"] | NAN;
+                currentWeather.pm10 = current["pm10"] | NAN;
+                currentWeather.airQualityValid = true;
+            }
+        }
+    }
+
+    // Air quality supplements the NWS feed; its failure must not invalidate
+    // otherwise current observations, forecasts, or alerts.
+    if (!currentWeather.airQualityValid)
+        Serial.println("[WeatherService] Air quality unavailable");
+    else
+    {
+        Serial.print("[WeatherService] US AQI: ");
+        Serial.println(currentWeather.usAqi);
+    }
+
+    lastError = "";
+    updating = false;
+    state = State::Ready;
+    nextActionMs = millis() + refreshIntervalMs;
 }
 
 bool WeatherService::performRequest(

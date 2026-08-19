@@ -1,45 +1,70 @@
 #pragma once
 
+#include <functional>
+
 #include <lvgl.h>
 
+#include "../models/Page.h"
 #include "../services/ClockService.h"
+#include "../services/AircraftService.h"
+#include "../services/SatelliteService.h"
+#include "../services/SolarService.h"
+#include "../services/LiveSpotsService.h"
+#include "../services/PotaService.h"
 #include "../services/WeatherService.h"
-#include "../ui/NavigationBar.h"
+#include "../ui/HeaderBar.h"
+#include "../ui/AircraftPanel.h"
+#include "../ui/SatellitePanel.h"
+#include "../ui/SolarPanel.h"
+#include "../ui/LiveSpotsPanel.h"
+#include "../ui/WeatherPanel.h"
+#include "../ui/PotaPanel.h"
 
 class DashboardScreen
 {
 public:
+    using NavigationCallback =
+        std::function<void(Page)>;
+
     void begin(
-    ClockService& clockService,
-    WeatherService& weatherService);
+        ClockService& clockService,
+        WeatherService& weatherService,
+        AircraftService& aircraftService,
+        SatelliteService& satelliteService,
+        SolarService& solarService,
+        LiveSpotsService& liveSpotsService,
+        PotaService& potaService);
+
     void show();
-    NavigationBar& getNavigationBar();
+
+    void setNavigationCallback(
+        NavigationCallback callback);
 
 private:
-    static void updateTimerCallback(lv_timer_t* timer);
+    static void updateTimerCallback(
+        lv_timer_t* timer);
 
     void update();
 
     lv_obj_t* screen = nullptr;
 
-    // Header
-    lv_obj_t* localTimeLabel = nullptr;
-    lv_obj_t* utcTimeLabel = nullptr;
+    HeaderBar headerBar;
 
-    lv_obj_t* wifiStatusLabel = nullptr;
-    lv_obj_t* ntpStatusLabel = nullptr;
-    
+    // Dashboard panels
+    WeatherPanel weatherPanel;
+    AircraftPanel aircraftPanel;
+    SatellitePanel satellitePanel;
+    SolarPanel solarPanel;
+    LiveSpotsPanel liveSpotsPanel;
+    PotaPanel potaPanel;
 
-    // Weather panel
-    lv_obj_t* weatherConditionLabel = nullptr;
-    lv_obj_t* weatherTempLabel = nullptr;
-    lv_obj_t* weatherDetailsLabel = nullptr;
-
-     // Navigation
-    NavigationBar navigationBar;
+    // Navigation from dashboard panels to detail screens
+    NavigationCallback navigationCallback;
 
     lv_timer_t* updateTimer = nullptr;
 
     ClockService* clockService = nullptr;
     WeatherService* weatherService = nullptr;
+    AircraftService* aircraftService = nullptr;
+    SatelliteService* satelliteService = nullptr;
 };

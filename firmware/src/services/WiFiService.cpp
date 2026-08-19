@@ -19,6 +19,7 @@ void WiFiService::begin(
         return;
     }
 
+    WiFi.disconnect();
     WiFi.mode(WIFI_STA);
 
     if (!hostname.isEmpty())

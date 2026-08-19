@@ -13,6 +13,7 @@ public:
     String getUTCTime();
 
     String getLocalDate();
+    String getDisplayDate();
     String getUTCDate();
 
 private:

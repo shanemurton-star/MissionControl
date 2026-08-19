@@ -112,6 +112,20 @@ String ClockService::getLocalDate()
     return String(buffer);
 }
 
+String ClockService::getDisplayDate()
+{
+    struct tm timeInfo;
+
+    if (!getLocalTimeInfo(timeInfo))
+    {
+        return "Waiting for time...";
+    }
+
+    char buffer[24];
+    strftime(buffer, sizeof(buffer), "%B %d, %Y", &timeInfo);
+    return String(buffer);
+}
+
 String ClockService::getUTCDate()
 {
     struct tm timeInfo;

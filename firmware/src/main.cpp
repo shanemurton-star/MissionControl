@@ -2,15 +2,27 @@
 
 #include "hardware/DisplayService.h"
 #include "services/SettingsService.h"
+#include "services/RadarService.h"
 #include "services/WeatherService.h"
 #include "services/WiFiService.h"
 #include "services/ClockService.h"
+#include "services/AircraftService.h"
+#include "services/SatelliteService.h"
+#include "services/SolarService.h"
+#include "services/LiveSpotsService.h"
+#include "services/PotaService.h"
 
 SettingsService settingsService;
 DisplayService displayService;
 WiFiService wifiService;
 ClockService clockService;
 WeatherService weatherService;
+RadarService radarService;
+AircraftService aircraftService;
+SatelliteService satelliteService;
+SolarService solarService;
+LiveSpotsService liveSpotsService;
+PotaService potaService;
 
 void setup()
 {
@@ -46,12 +58,33 @@ void setup()
      * next step.
      */
     clockService.begin();
-     weatherService.begin(
-    settingsService.get());
+
+    weatherService.begin(
+        settingsService.get());
+
+    radarService.begin(
+        settingsService.get());
+
+    aircraftService.begin(
+        settingsService.get());
+
+    satelliteService.begin(
+        settingsService.get());
+    solarService.begin();
+    liveSpotsService.begin(settingsService.get());
+    potaService.begin(settingsService.get());
 
     if (displayService.begin(
         clockService,
-        weatherService))
+        weatherService,
+        radarService,
+        aircraftService,
+        satelliteService,
+        solarService,
+        liveSpotsService,
+        potaService,
+        settingsService,
+        wifiService))
     {
         Serial.println(
             "Display service initialized.");
@@ -67,6 +100,12 @@ void loop()
 {
     wifiService.update();
     weatherService.update();
+    radarService.update();
+    aircraftService.update();
+    satelliteService.update();
+    solarService.update();
+    liveSpotsService.update();
+    potaService.update();
     displayService.update();
 
     delay(5);

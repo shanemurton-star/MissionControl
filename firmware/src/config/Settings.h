@@ -16,7 +16,7 @@
 // Station defaults
 // ------------------------------------------------------------
 
-#define DEFAULT_CALLSIGN ""
+#define DEFAULT_CALLSIGN "KF8EFV"
 
 #define DEFAULT_GRID_SQUARE "EN82"
 

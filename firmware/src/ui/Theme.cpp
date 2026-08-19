@@ -118,26 +118,6 @@ namespace Theme
             LV_OBJ_FLAG_SCROLLABLE);
     }
 
-    void configureNavigationBar(lv_obj_t* object)
-    {
-        configureHeader(object);
-
-        lv_obj_set_style_border_color(
-            object,
-            color(COLOR_PANEL_BORDER),
-            LV_PART_MAIN);
-
-        lv_obj_set_style_border_width(
-            object,
-            1,
-            LV_PART_MAIN);
-
-        lv_obj_set_style_border_side(
-            object,
-            LV_BORDER_SIDE_TOP,
-            LV_PART_MAIN);
-    }
-
     lv_obj_t* createLabel(
         lv_obj_t* parent,
         const char* text,

@@ -3,6 +3,7 @@
 #include <Arduino.h>
 
 #include "../models/WeatherData.h"
+#include "../models/ForecastData.h"
 #include "../models/AppSettings.h"
 
 class WeatherService
@@ -15,6 +16,7 @@ public:
     bool isUpdating() const;
 
     const WeatherData& getCurrentWeather() const;
+    const ForecastData& getForecast() const;
     const String& getLastError() const;
 
     String getTemperature() const;
@@ -33,6 +35,9 @@ private:
         ResolvePoint,
         ResolveStation,
         FetchObservation,
+        FetchForecast,
+        FetchAlerts,
+        FetchAirQuality,
         Ready,
         RetryDelay
     };
@@ -46,6 +51,9 @@ private:
     void resolvePoint();
     void resolveStation();
     void fetchObservation();
+    void fetchForecast();
+    void fetchAlerts();
+    void fetchAirQuality();
 
     bool performRequest(
         const String& url,
@@ -86,9 +94,12 @@ private:
     State state = State::WaitingForWiFi;
 
     WeatherData currentWeather;
+    ForecastData forecast;
 
     String stationsUrl;
     String latestObservationUrl;
+    String forecastUrl;
+    String alertsUrl;
     String lastError;
 
     unsigned long nextActionMs = 0;

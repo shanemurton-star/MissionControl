@@ -169,22 +169,25 @@ namespace
         }
 
         if (touch_touched())
-        if (touch_touched())
-{
-    data->state = LV_INDEV_STATE_PR;
-    data->point.x = touch_last_x;
-    data->point.y = touch_last_y;
-}
-        else if (touch_released())
         {
-            data->state = LV_INDEV_STATE_REL;
+            data->state = LV_INDEV_STATE_PR;
+            data->point.x = touch_last_x;
+            data->point.y = touch_last_y;
         }
     }
 }
 
 bool DisplayService::begin(
     ClockService& clockService,
-    WeatherService& weatherService)
+    WeatherService& weatherService,
+    RadarService& radarService,
+    AircraftService& aircraftService,
+    SatelliteService& satelliteService,
+    SolarService& solarService,
+    LiveSpotsService& liveSpotsService,
+    PotaService& potaService,
+    SettingsService& settingsService,
+    WiFiService& wifiService)
 {
     Serial.println("Initializing CrowPanel display...");
 
@@ -239,9 +242,21 @@ bool DisplayService::begin(
         BACKLIGHT_BRIGHTNESS);
 
     
+    Serial.println("Creating Mission Control UI...");
+
     screenManager.begin(
-    clockService,
-    weatherService);
+        clockService,
+        weatherService,
+        radarService,
+        aircraftService,
+        satelliteService,
+        solarService,
+        liveSpotsService,
+        potaService,
+        settingsService,
+        wifiService);
+
+    Serial.println("Mission Control UI created.");
 
     lastTickMillis = millis();
 
