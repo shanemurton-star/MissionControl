@@ -6,6 +6,7 @@ class ClockService
 {
 public:
     void begin();
+    void update();
 
     bool isSynchronized();
 
@@ -19,4 +20,6 @@ public:
 private:
     bool getLocalTimeInfo(struct tm& timeInfo);
     bool getUTCTimeInfo(struct tm& timeInfo);
+    bool ntpConfigured = false;
+    bool synchronizationReported = false;
 };

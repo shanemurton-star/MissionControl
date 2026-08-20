@@ -180,7 +180,6 @@ namespace
 bool DisplayService::begin(
     ClockService& clockService,
     WeatherService& weatherService,
-    RadarService& radarService,
     AircraftService& aircraftService,
     SatelliteService& satelliteService,
     SolarService& solarService,
@@ -247,7 +246,6 @@ bool DisplayService::begin(
     screenManager.begin(
         clockService,
         weatherService,
-        radarService,
         aircraftService,
         satelliteService,
         solarService,

@@ -8,7 +8,6 @@
 #include "../services/SatelliteService.h"
 #include "../services/SolarService.h"
 #include "../services/LiveSpotsService.h"
-#include "../services/RadarService.h"
 #include "../services/WeatherService.h"
 #include "../services/SettingsService.h"
 #include "../services/WiFiService.h"
@@ -20,7 +19,6 @@ public:
     bool begin(
         ClockService& clockService,
         WeatherService& weatherService,
-        RadarService& radarService,
         AircraftService& aircraftService,
         SatelliteService& satelliteService,
         SolarService& solarService,

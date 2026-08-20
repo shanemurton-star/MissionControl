@@ -6,12 +6,9 @@
 
 #include "../models/Page.h"
 #include "../services/ClockService.h"
-#include "../services/RadarService.h"
 #include "../services/WeatherService.h"
 #include "../ui/HeaderBar.h"
 #include "../ui/WeatherForecastPanel.h"
-#include "../ui/WeatherRadarPanel.h"
-#include "../ui/WeatherPanel.h"
 
 class WeatherScreen
 {
@@ -21,8 +18,7 @@ public:
 
     void begin(
         ClockService& clockService,
-        WeatherService& weatherService,
-        RadarService& radarService);
+        WeatherService& weatherService);
 
     void show();
 
@@ -41,9 +37,15 @@ private:
     lv_obj_t* screen = nullptr;
 
     HeaderBar headerBar;
-    WeatherRadarPanel radarPanel;
-    WeatherPanel currentConditionsPanel;
     WeatherForecastPanel forecastPanel;
+
+    lv_obj_t* weatherIcon = nullptr;
+    lv_obj_t* temperatureLabel = nullptr;
+    lv_obj_t* conditionLabel = nullptr;
+    lv_obj_t* conditionsDetailLabel = nullptr;
+    lv_obj_t* airQualityLabel = nullptr;
+    lv_obj_t* airQualityCategoryLabel = nullptr;
+    lv_obj_t* atmosphereDetailLabel = nullptr;
 
     NavigationCallback navigationCallback;
 
@@ -51,5 +53,4 @@ private:
 
     ClockService* clockService = nullptr;
     WeatherService* weatherService = nullptr;
-    RadarService* radarService = nullptr;
 };

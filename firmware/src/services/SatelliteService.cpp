@@ -100,8 +100,11 @@ void SatelliteService::fetchNextTle()
 
 bool SatelliteService::fetchTle(uint8_t index)
 {
-    const String url = String("https://celestrak.org/NORAD/elements/gp.php?CATNR=") +
-        DEFINITIONS[index].catalogNumber + "&FORMAT=TLE";
+    // CelesTrak periodically becomes unreachable from embedded clients. The
+    // SatNOGS DB exposes the same current GP elements by NORAD catalog number
+    // and identifies the upstream source in its response.
+    const String url = String("https://db.satnogs.org/api/tle/?norad_cat_id=") +
+        DEFINITIONS[index].catalogNumber + "&format=json";
     HTTPClient http;
     http.setConnectTimeout(REQUEST_TIMEOUT_MS);
     http.setTimeout(REQUEST_TIMEOUT_MS);
@@ -115,16 +118,31 @@ bool SatelliteService::fetchTle(uint8_t index)
     const int responseCode = http.GET();
     if (responseCode < 200 || responseCode >= 300)
     {
-        lastError = String("CelesTrak HTTP ") + responseCode;
+        lastError = String("SatNOGS TLE HTTP ") + responseCode;
         http.end();
         return false;
     }
 
-    WiFiClient* stream = http.getStreamPtr();
-    String name = stream->readStringUntil('\n');
-    String line1 = stream->readStringUntil('\n');
-    String line2 = stream->readStringUntil('\n');
+    JsonDocument document;
+    const DeserializationError error = deserializeJson(document, http.getStream());
     http.end();
+    if (error)
+    {
+        lastError = String("TLE data error: ") + error.c_str();
+        return false;
+    }
+
+    JsonArrayConst results = document.as<JsonArrayConst>();
+    if (results.isNull() || results.size() == 0)
+    {
+        lastError = String("No TLE for ") + DEFINITIONS[index].name;
+        return false;
+    }
+
+    String name = String(results[0]["tle0"] | DEFINITIONS[index].name);
+    String line1 = String(results[0]["tle1"] | "");
+    String line2 = String(results[0]["tle2"] | "");
+    if (name.startsWith("0 ")) name.remove(0, 2);
     trimLine(name);
     trimLine(line1);
     trimLine(line2);

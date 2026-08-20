@@ -20,9 +20,9 @@ public:
     const String& getLastError() const;
 
 private:
-    static constexpr uint32_t REFRESH_MS = 60UL * 1000UL;
+    static constexpr uint32_t REFRESH_MS = 15UL * 60UL * 1000UL;
     static constexpr uint32_t RETRY_MS = 30UL * 1000UL;
-    static constexpr uint32_t REQUEST_TIMEOUT_MS = 15000UL;
+    static constexpr uint32_t REQUEST_TIMEOUT_MS = 8000UL;
 
     void fetchSpots();
     void insertSpot(const PotaSpotData& spot);

@@ -2,17 +2,29 @@
 
 #include "../config/Settings.h"
 
+#include <WiFi.h>
 #include <time.h>
 
 void ClockService::begin()
 {
-    configTzTime(
-        TIMEZONE,
-        "pool.ntp.org",
-        "time.nist.gov");
-
     Serial.println("Clock service started.");
-    Serial.println("Waiting for network time synchronization...");
+    Serial.println("NTP will start after WiFi receives an IP address.");
+}
+
+void ClockService::update()
+{
+    if (!ntpConfigured && WiFi.status() == WL_CONNECTED)
+    {
+        configTzTime(TIMEZONE, "pool.ntp.org", "time.nist.gov");
+        ntpConfigured = true;
+        Serial.println("Waiting for network time synchronization...");
+    }
+
+    if (ntpConfigured && !synchronizationReported && time(nullptr) >= 1704067200)
+    {
+        synchronizationReported = true;
+        Serial.println("Network time synchronized.");
+    }
 }
 
 bool ClockService::isSynchronized()

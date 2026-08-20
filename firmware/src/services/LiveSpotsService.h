@@ -20,9 +20,9 @@ public:
     const String& getGridSquare() const;
 
 private:
-    static constexpr unsigned long REFRESH_MS = 5UL * 60UL * 1000UL;
+    static constexpr unsigned long REFRESH_MS = 15UL * 60UL * 1000UL;
     static constexpr unsigned long RETRY_MS = 60UL * 1000UL;
-    static constexpr unsigned long REQUEST_TIMEOUT_MS = 20000UL;
+    static constexpr unsigned long REQUEST_TIMEOUT_MS = 12000UL;
     bool fetchReports();
     void parseReports(const String& xml);
     static String attribute(const String& tag, const char* name);

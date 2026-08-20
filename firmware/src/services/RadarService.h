@@ -42,7 +42,7 @@ private:
     static constexpr unsigned long RETRY_INTERVAL_MS =
         60UL * 1000UL;
     static constexpr unsigned long REQUEST_TIMEOUT_MS =
-        15000UL;
+        12000UL;
     static constexpr size_t MAX_IMAGE_SIZE =
         512UL * 1024UL;
 

@@ -2,19 +2,6 @@
 
 #include "Theme.h"
 
-namespace
-{
-    String aqiCategory(int16_t aqi)
-    {
-        if (aqi <= 50) return "GOOD";
-        if (aqi <= 100) return "MODERATE";
-        if (aqi <= 150) return "UNHEALTHY FOR SENSITIVE";
-        if (aqi <= 200) return "UNHEALTHY";
-        if (aqi <= 300) return "VERY UNHEALTHY";
-        return "HAZARDOUS";
-    }
-}
-
 void WeatherForecastPanel::create(
     lv_obj_t* parent,
     WeatherService& weatherServiceReference,
@@ -31,7 +18,7 @@ void WeatherForecastPanel::create(
         y,
         width,
         height,
-        "FORECAST  |  AQI  |  ALERTS");
+        "EXTENDED FORECAST  |  ALERTS");
 
     lv_obj_t* scroller = lv_obj_create(panel);
     lv_obj_set_pos(scroller, 0, 28);
@@ -75,16 +62,7 @@ void WeatherForecastPanel::update()
         return;
     }
 
-    const WeatherData& weather = weatherService->getCurrentWeather();
-    String content;
-    if (weather.airQualityValid)
-    {
-        content = "US AQI  " + String(weather.usAqi) + "  " + aqiCategory(weather.usAqi);
-        content += "\nPM2.5 " + String(weather.pm25, 1) + "   PM10 " + String(weather.pm10, 1);
-    }
-    else content = "US AQI  UPDATING / UNAVAILABLE";
-
-    content += "\n\nHIGH ";
+    String content = "HIGH ";
     content += forecast.hasHigh
         ? String(forecast.highF) + " F"
         : "-- F";

@@ -46,7 +46,7 @@ private:
         60UL * 1000UL;
 
     static constexpr unsigned long REQUEST_TIMEOUT_MS =
-        15000UL;
+        8000UL;
 
     void resolvePoint();
     void resolveStation();

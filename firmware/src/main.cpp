@@ -2,7 +2,6 @@
 
 #include "hardware/DisplayService.h"
 #include "services/SettingsService.h"
-#include "services/RadarService.h"
 #include "services/WeatherService.h"
 #include "services/WiFiService.h"
 #include "services/ClockService.h"
@@ -17,7 +16,6 @@ DisplayService displayService;
 WiFiService wifiService;
 ClockService clockService;
 WeatherService weatherService;
-RadarService radarService;
 AircraftService aircraftService;
 SatelliteService satelliteService;
 SolarService solarService;
@@ -62,9 +60,6 @@ void setup()
     weatherService.begin(
         settingsService.get());
 
-    radarService.begin(
-        settingsService.get());
-
     aircraftService.begin(
         settingsService.get());
 
@@ -77,7 +72,6 @@ void setup()
     if (displayService.begin(
         clockService,
         weatherService,
-        radarService,
         aircraftService,
         satelliteService,
         solarService,
@@ -98,15 +92,47 @@ void setup()
 
 void loop()
 {
-    wifiService.update();
-    weatherService.update();
-    radarService.update();
-    aircraftService.update();
-    satelliteService.update();
-    solarService.update();
-    liveSpotsService.update();
-    potaService.update();
+    // LVGL must run before any synchronous network operation so touch and
+    // drawing never wait behind a whole batch of API requests.
     displayService.update();
+    wifiService.update();
+    clockService.update();
+
+    static uint8_t serviceSlot = 0;
+    static uint32_t nextServiceMs = 0;
+    static uint32_t networkServicesStartMs = 0;
+
+    // Give SNTP exclusive use of the newly connected network before starting
+    // HTTPS/DNS traffic. If NTP is unavailable, do not suppress useful data
+    // forever; fall back after 20 seconds.
+    if (wifiService.isConnected() && networkServicesStartMs == 0)
+        networkServicesStartMs = millis() + 20000UL;
+
+    const bool timeReady = clockService.isSynchronized();
+    const bool ntpWaitExpired = networkServicesStartMs != 0 &&
+        static_cast<int32_t>(millis() - networkServicesStartMs) >= 0;
+
+    if ((timeReady || ntpWaitExpired) &&
+        static_cast<int32_t>(millis() - nextServiceMs) >= 0)
+    {
+        // Run at most one service state per pass. Several services have
+        // multi-request startup sequences; round-robin prevents them from
+        // monopolizing the UI loop back-to-back.
+        switch (serviceSlot)
+        {
+            case 0: weatherService.update(); break;
+            case 1: aircraftService.update(); break;
+            case 2: satelliteService.update(); break;
+            case 3: solarService.update(); break;
+            case 4: liveSpotsService.update(); break;
+            case 5: potaService.update(); break;
+        }
+        serviceSlot = (serviceSlot + 1) % 6;
+        nextServiceMs = millis() + 25UL;
+
+        // Catch LVGL up immediately after a request that took noticeable time.
+        displayService.update();
+    }
 
     delay(5);
 }

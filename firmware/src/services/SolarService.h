@@ -17,7 +17,7 @@ public:
 private:
     static constexpr unsigned long REFRESH_MS = 5UL * 60UL * 1000UL;
     static constexpr unsigned long RETRY_MS = 60UL * 1000UL;
-    static constexpr unsigned long REQUEST_TIMEOUT_MS = 15000UL;
+    static constexpr unsigned long REQUEST_TIMEOUT_MS = 8000UL;
     bool fetchJson(const char* url, String& payload);
     bool fetchAll();
     static bool timeReached(unsigned long target);

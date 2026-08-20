@@ -3,7 +3,6 @@
 void ScreenManager::begin(
     ClockService& clockService,
     WeatherService& weatherService,
-    RadarService& radarService,
     AircraftService& aircraftService,
     SatelliteService& satelliteService,
     SolarService& solarService,
@@ -29,8 +28,7 @@ void ScreenManager::begin(
 
     weatherScreen.begin(
         clockService,
-        weatherService,
-        radarService);
+        weatherService);
 
     Serial.println("[UI] Aircraft screen...");
     aircraftScreen.begin(clockService, aircraftService);

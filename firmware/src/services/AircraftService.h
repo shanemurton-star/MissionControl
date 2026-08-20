@@ -24,7 +24,7 @@ public:
 private:
     static constexpr unsigned long REFRESH_INTERVAL_MS = 3UL * 60UL * 1000UL;
     static constexpr unsigned long RETRY_INTERVAL_MS = 60UL * 1000UL;
-    static constexpr unsigned long REQUEST_TIMEOUT_MS = 15000UL;
+    static constexpr unsigned long REQUEST_TIMEOUT_MS = 8000UL;
 
     void fetchAircraft();
     void calculatePosition(AircraftData& aircraft) const;
