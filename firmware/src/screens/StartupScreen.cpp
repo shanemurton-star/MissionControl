@@ -1,5 +1,7 @@
 #include "StartupScreen.h"
 
+#include "../config/Version.h"
+
 void StartupScreen::begin()
 {
     // Do not create the screen more than once.
@@ -28,7 +30,7 @@ void StartupScreen::begin()
 
     lv_label_set_text(
         title,
-        "MISSION CONTROL");
+        "HAM SHACK MISSION CONTROL");
 
     lv_obj_set_style_text_color(
         title,
@@ -45,6 +47,28 @@ void StartupScreen::begin()
         LV_ALIGN_CENTER,
         0,
         -70);
+
+    lv_obj_t* author = lv_label_create(screen);
+
+    lv_label_set_text(
+        author,
+        "by KF8EFV");
+
+    lv_obj_set_style_text_color(
+        author,
+        lv_color_hex(0x8EA9C1),
+        LV_PART_MAIN);
+
+    lv_obj_set_style_text_font(
+        author,
+        &lv_font_montserrat_14,
+        LV_PART_MAIN);
+
+    lv_obj_align(
+        author,
+        LV_ALIGN_CENTER,
+        0,
+        -42);
 
     lv_obj_t* subtitle = lv_label_create(screen);
 
@@ -94,7 +118,7 @@ void StartupScreen::begin()
 
     lv_label_set_text(
         version,
-        "Firmware v0.1");
+        Version::FIRMWARE);
 
     lv_obj_set_style_text_color(
         version,

@@ -1,4 +1,5 @@
 #include "AircraftScreen.h"
+#include "../services/NetworkUpdateState.h"
 
 #include <WiFi.h>
 #include <math.h>
@@ -14,6 +15,9 @@ void AircraftScreen::begin(ClockService& clockService, AircraftService& service)
     headerBar.create(screen, clockService, Theme::SCREEN_WIDTH, Theme::HEADER_HEIGHT);
     headerBar.setSettingsCallback([this]() {
         if (navigationCallback != nullptr) navigationCallback(Page::Settings);
+    });
+    headerBar.setNavigationCallback([this](Page page) {
+        if (navigationCallback != nullptr) navigationCallback(page);
     });
 
     lv_obj_t* backButton = lv_btn_create(screen);
@@ -97,6 +101,9 @@ void AircraftScreen::begin(ClockService& clockService, AircraftService& service)
     detailHeaderBar.setSettingsCallback([this]() {
         if (navigationCallback != nullptr) navigationCallback(Page::Settings);
     });
+    detailHeaderBar.setNavigationCallback([this](Page page) {
+        if (navigationCallback != nullptr) navigationCallback(page);
+    });
     lv_obj_t* detailBackButton = lv_btn_create(detailScreen);
     lv_obj_set_pos(detailBackButton, 8, Theme::CONTENT_TOP);
     lv_obj_set_size(detailBackButton, 132, 36);
@@ -140,6 +147,7 @@ void AircraftScreen::setNavigationCallback(NavigationCallback callback) { naviga
 void AircraftScreen::update()
 {
     headerBar.update();
+    if (NetworkUpdateState::isBusy()) return;
     if (aircraftService == nullptr) return;
     const uint8_t count = aircraftService->getAircraftCount();
     String countText = String(count) + " AIRCRAFT WITHIN 25 NM";

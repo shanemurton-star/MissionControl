@@ -59,6 +59,9 @@ void SettingsScreen::begin(
     screen = lv_obj_create(nullptr);
     Theme::configureScreen(screen);
     headerBar.create(screen, clockService, Theme::SCREEN_WIDTH, Theme::HEADER_HEIGHT);
+    headerBar.setNavigationCallback([this](Page page) {
+        if (navigationCallback != nullptr) navigationCallback(page);
+    });
 
     lv_obj_t* backButton = lv_btn_create(screen);
     lv_obj_set_pos(backButton, 8, Theme::CONTENT_TOP);
@@ -534,7 +537,7 @@ void SettingsScreen::scanForWiFi()
     }
     lv_timer_handler();
 
-    const int found = WiFi.scanNetworks(false, true);
+    const int found = wifiService->scanNetworks();
     uint8_t shown = 0;
     for (int source = 0; source < found && shown < 8; ++source)
     {
@@ -557,11 +560,20 @@ void SettingsScreen::scanForWiFi()
         lv_obj_clear_flag(wifiNetworkButtons[shown], LV_OBJ_FLAG_HIDDEN);
         ++shown;
     }
-    WiFi.scanDelete();
-    lv_label_set_text(
-        wifiScanStatusLabel,
-        shown == 0 ? "No networks found - manual entry remains available" :
-                     "Select a network, then enter its password");
+    wifiService->finishNetworkScan();
+    if (found < 0)
+    {
+        const String error = String("WiFi scan failed: ") + found +
+            " - manual entry remains available";
+        lv_label_set_text(wifiScanStatusLabel, error.c_str());
+    }
+    else
+    {
+        lv_label_set_text(
+            wifiScanStatusLabel,
+            shown == 0 ? "No 2.4 GHz networks visible - manual entry remains available" :
+                         "Select a network, then enter its password");
+    }
 }
 
 void SettingsScreen::textAreaEventHandler(lv_event_t* event)

@@ -3,7 +3,16 @@
 #include "../config/Settings.h"
 
 #include <WiFi.h>
+#include <stdlib.h>
 #include <time.h>
+
+namespace
+{
+    // Cloudflare's numeric NTP addresses avoid a DNS lookup during startup.
+    // These are the same endpoints used by the isolated network diagnostic.
+    constexpr const char* PRIMARY_NTP = "162.159.200.1";
+    constexpr const char* BACKUP_NTP = "162.159.200.123";
+}
 
 void ClockService::begin()
 {
@@ -15,12 +24,17 @@ void ClockService::update()
 {
     if (!ntpConfigured && WiFi.status() == WL_CONNECTED)
     {
-        configTzTime(TIMEZONE, "pool.ntp.org", "time.nist.gov");
+        // Use numeric NTP servers so time synchronization cannot contend for
+        // DNS with panel services. configTime() sets its own UTC timezone, so
+        // apply the configured local timezone after calling it.
+        configTime(0, 0, PRIMARY_NTP, BACKUP_NTP);
+        setenv("TZ", TIMEZONE, 1);
+        tzset();
         ntpConfigured = true;
         Serial.println("Waiting for network time synchronization...");
     }
 
-    if (ntpConfigured && !synchronizationReported && time(nullptr) >= 1704067200)
+    if (ntpConfigured && !synchronizationReported && time(nullptr) >= MINIMUM_VALID_TIME)
     {
         synchronizationReported = true;
         Serial.println("Network time synchronized.");
@@ -29,8 +43,9 @@ void ClockService::update()
 
 bool ClockService::isSynchronized()
 {
-    struct tm timeInfo;
-    return getLocalTimeInfo(timeInfo);
+    // time(nullptr) is immediate. getLocalTime() can wait for its timeout and
+    // this method is called on every UI loop pass.
+    return time(nullptr) >= MINIMUM_VALID_TIME;
 }
 
 bool ClockService::getLocalTimeInfo(struct tm& timeInfo)
@@ -50,8 +65,6 @@ bool ClockService::getUTCTimeInfo(struct tm& timeInfo)
      * An unsynchronized ESP32 normally reports a time close to
      * January 1, 1970. Reject anything before 2024.
      */
-    constexpr time_t MINIMUM_VALID_TIME = 1704067200;
-
     if (now < MINIMUM_VALID_TIME)
     {
         return false;

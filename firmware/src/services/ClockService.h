@@ -18,6 +18,7 @@ public:
     String getUTCDate();
 
 private:
+    static constexpr time_t MINIMUM_VALID_TIME = 1704067200;
     bool getLocalTimeInfo(struct tm& timeInfo);
     bool getUTCTimeInfo(struct tm& timeInfo);
     bool ntpConfigured = false;

@@ -1,4 +1,5 @@
 #include "PotaScreen.h"
+#include "../services/NetworkUpdateState.h"
 
 #include <WiFi.h>
 
@@ -13,6 +14,9 @@ void PotaScreen::begin(ClockService& clockService, PotaService& service)
     headerBar.create(screen, clockService, Theme::SCREEN_WIDTH, Theme::HEADER_HEIGHT);
     headerBar.setSettingsCallback([this]() {
         if (navigationCallback != nullptr) navigationCallback(Page::Settings);
+    });
+    headerBar.setNavigationCallback([this](Page page) {
+        if (navigationCallback != nullptr) navigationCallback(page);
     });
 
     lv_obj_t* backButton = lv_btn_create(screen);
@@ -58,6 +62,7 @@ void PotaScreen::setNavigationCallback(NavigationCallback callback)
 void PotaScreen::update()
 {
     headerBar.update();
+    if (NetworkUpdateState::isBusy()) return;
     if (potaService == nullptr) return;
     if (!potaService->isValid())
     {

@@ -23,7 +23,7 @@ public:
 
 private:
     static constexpr unsigned long TLE_REFRESH_MS = 2UL * 60UL * 60UL * 1000UL;
-    static constexpr unsigned long RETRY_MS = 5UL * 60UL * 1000UL;
+    static constexpr unsigned long RETRY_MS = 30UL * 1000UL;
     static constexpr unsigned long POSITION_UPDATE_MS = 1000UL;
     static constexpr unsigned long REQUEST_TIMEOUT_MS = 8000UL;
 

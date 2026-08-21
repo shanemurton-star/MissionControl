@@ -1,4 +1,5 @@
 #include "LiveSpotsScreen.h"
+#include "../services/NetworkUpdateState.h"
 #include <WiFi.h>
 #include "../ui/Theme.h"
 
@@ -11,6 +12,9 @@ void LiveSpotsScreen::begin(ClockService& clockService, LiveSpotsService& spotsS
     headerBar.create(screen, clockService, Theme::SCREEN_WIDTH, Theme::HEADER_HEIGHT);
     headerBar.setSettingsCallback([this]() {
         if (navigationCallback != nullptr) navigationCallback(Page::Settings);
+    });
+    headerBar.setNavigationCallback([this](Page page) {
+        if (navigationCallback != nullptr) navigationCallback(page);
     });
     lv_obj_t* backButton = lv_btn_create(screen);
     lv_obj_set_pos(backButton, 8, Theme::CONTENT_TOP);
@@ -41,6 +45,7 @@ void LiveSpotsScreen::setNavigationCallback(NavigationCallback callback) { navig
 void LiveSpotsScreen::update()
 {
     headerBar.update();
+    if (NetworkUpdateState::isBusy()) return;
     if (service == nullptr) return;
     const String title = "LIVE PSK SPOTS  |  " + service->getGridSquare();
     lv_label_set_text(titleLabel, title.c_str());

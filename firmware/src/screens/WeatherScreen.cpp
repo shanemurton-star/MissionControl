@@ -1,4 +1,5 @@
 #include "WeatherScreen.h"
+#include "../services/NetworkUpdateState.h"
 
 #include <math.h>
 #include "../ui/DashboardIcons.h"
@@ -47,6 +48,9 @@ void WeatherScreen::begin(
         Theme::HEADER_HEIGHT);
     headerBar.setSettingsCallback([this]() {
         if (navigationCallback != nullptr) navigationCallback(Page::Settings);
+    });
+    headerBar.setNavigationCallback([this](Page page) {
+        if (navigationCallback != nullptr) navigationCallback(page);
     });
 
     lv_obj_t* backButton =
@@ -178,6 +182,7 @@ void WeatherScreen::setNavigationCallback(
 void WeatherScreen::update()
 {
     headerBar.update();
+    if (NetworkUpdateState::isBusy()) return;
     forecastPanel.update();
 
     if (weatherService == nullptr || temperatureLabel == nullptr) return;

@@ -14,7 +14,9 @@ struct SatelliteRadioChannel
 
 struct SatelliteData
 {
-    static constexpr uint8_t MAX_RADIO_CHANNELS = 8;
+    // Four prioritized active channels are enough for the detail page and
+    // avoid retaining dozens of heap-backed Strings across five satellites.
+    static constexpr uint8_t MAX_RADIO_CHANNELS = 4;
 
     String name;
     uint32_t catalogNumber = 0;

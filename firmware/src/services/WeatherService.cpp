@@ -40,6 +40,29 @@ namespace
         return value.as<float>();
     }
 
+    float calculateRelativeHumidity(
+        float temperatureC,
+        float dewPointC)
+    {
+        if (!isValidNumber(temperatureC) ||
+            !isValidNumber(dewPointC))
+        {
+            return NAN;
+        }
+
+        // Magnus approximation for relative humidity from air temperature
+        // and dew point. NWS stations occasionally omit relativeHumidity even
+        // when both of these measurements are present.
+        const float dewExponent =
+            (17.625f * dewPointC) / (243.04f + dewPointC);
+        const float temperatureExponent =
+            (17.625f * temperatureC) / (243.04f + temperatureC);
+        const float humidity =
+            100.0f * expf(dewExponent - temperatureExponent);
+
+        return constrain(humidity, 0.0f, 100.0f);
+    }
+
     String readUnitCode(
         JsonVariantConst measurement)
     {
@@ -64,10 +87,7 @@ void WeatherService::begin(
     longitude =
         settings.longitude;
 
-    refreshIntervalMs =
-        settings.weatherRefreshMinutes *
-        60UL *
-        1000UL;
+    refreshIntervalMs = 15UL * 60UL * 1000UL;
 
     currentWeather = WeatherData();
     forecast = ForecastData();
@@ -610,6 +630,14 @@ void WeatherService::fetchObservation()
                   dewPointC)
             : NAN;
 
+    if (!isValidNumber(currentWeather.humidityPercent))
+    {
+        currentWeather.humidityPercent =
+            calculateRelativeHumidity(
+                temperatureC,
+                dewPointC);
+    }
+
     /*
      * Wind direction
      */
@@ -912,6 +940,71 @@ void WeatherService::fetchAirQuality()
                 currentWeather.pm25 = current["pm2_5"] | NAN;
                 currentWeather.pm10 = current["pm10"] | NAN;
                 currentWeather.airQualityValid = true;
+            }
+        }
+    }
+
+    // Some NWS observation stations omit humidity, dew point, or wind. Obtain
+    // only missing current values from Open-Meteo; never replace measurements
+    // that the station did report.
+    const bool needsWeatherFallback =
+        !isValidNumber(currentWeather.humidityPercent) ||
+        !isValidNumber(currentWeather.dewPointF) ||
+        !isValidNumber(currentWeather.windSpeedMph) ||
+        currentWeather.windDirection == "--";
+
+    if (needsWeatherFallback)
+    {
+        const String humidityUrl =
+            String("https://api.open-meteo.com/v1/forecast?latitude=") +
+            String(latitude, 4) + "&longitude=" + String(longitude, 4) +
+            "&current=relative_humidity_2m,dew_point_2m,wind_speed_10m,"
+            "wind_direction_10m,wind_gusts_10m&temperature_unit=fahrenheit"
+            "&wind_speed_unit=mph&forecast_days=1";
+
+        String humidityResponse;
+        if (performRequest(humidityUrl, humidityResponse))
+        {
+            JsonDocument humidityDocument;
+            const DeserializationError humidityError =
+                deserializeJson(humidityDocument, humidityResponse);
+            if (!humidityError)
+            {
+                JsonObjectConst current =
+                    humidityDocument["current"].as<JsonObjectConst>();
+
+                if (!isValidNumber(currentWeather.humidityPercent) &&
+                    !current["relative_humidity_2m"].isNull())
+                {
+                    currentWeather.humidityPercent =
+                        current["relative_humidity_2m"].as<float>();
+                }
+                if (!isValidNumber(currentWeather.dewPointF) &&
+                    !current["dew_point_2m"].isNull())
+                {
+                    currentWeather.dewPointF =
+                        current["dew_point_2m"].as<float>();
+                }
+                if (!isValidNumber(currentWeather.windSpeedMph) &&
+                    !current["wind_speed_10m"].isNull())
+                {
+                    currentWeather.windSpeedMph =
+                        current["wind_speed_10m"].as<float>();
+                }
+                if (!isValidNumber(currentWeather.windGustMph) &&
+                    !current["wind_gusts_10m"].isNull())
+                {
+                    currentWeather.windGustMph =
+                        current["wind_gusts_10m"].as<float>();
+                }
+                if (currentWeather.windDirection == "--" &&
+                    !current["wind_direction_10m"].isNull())
+                {
+                    currentWeather.windDirection = degreesToCompass(
+                        current["wind_direction_10m"].as<float>());
+                }
+
+                Serial.println("[WeatherService] Missing observations supplemented by Open-Meteo");
             }
         }
     }

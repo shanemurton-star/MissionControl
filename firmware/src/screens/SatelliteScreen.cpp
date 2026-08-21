@@ -1,4 +1,5 @@
 #include "SatelliteScreen.h"
+#include "../services/NetworkUpdateState.h"
 
 #include <WiFi.h>
 #include <math.h>
@@ -58,6 +59,9 @@ void SatelliteScreen::begin(ClockService& clockService, SatelliteService& servic
     headerBar.create(screen, clockService, Theme::SCREEN_WIDTH, Theme::HEADER_HEIGHT);
     headerBar.setSettingsCallback([this]() {
         if (navigationCallback != nullptr) navigationCallback(Page::Settings);
+    });
+    headerBar.setNavigationCallback([this](Page page) {
+        if (navigationCallback != nullptr) navigationCallback(page);
     });
 
     lv_obj_t* backButton = lv_btn_create(screen);
@@ -144,6 +148,9 @@ void SatelliteScreen::begin(ClockService& clockService, SatelliteService& servic
     detailHeaderBar.setSettingsCallback([this]() {
         if (navigationCallback != nullptr) navigationCallback(Page::Settings);
     });
+    detailHeaderBar.setNavigationCallback([this](Page page) {
+        if (navigationCallback != nullptr) navigationCallback(page);
+    });
     lv_obj_t* detailBackButton = lv_btn_create(detailScreen);
     lv_obj_set_pos(detailBackButton, 8, Theme::CONTENT_TOP);
     lv_obj_set_size(detailBackButton, 140, 36);
@@ -183,6 +190,7 @@ void SatelliteScreen::setNavigationCallback(NavigationCallback callback) { navig
 void SatelliteScreen::update()
 {
     headerBar.update();
+    if (NetworkUpdateState::isBusy()) return;
     if (satelliteService == nullptr) return;
     if (!satelliteService->isValid())
     {

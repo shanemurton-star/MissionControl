@@ -43,7 +43,7 @@ private:
     };
 
     static constexpr unsigned long RETRY_INTERVAL_MS =
-        60UL * 1000UL;
+        15UL * 1000UL;
 
     static constexpr unsigned long REQUEST_TIMEOUT_MS =
         8000UL;

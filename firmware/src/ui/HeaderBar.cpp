@@ -7,6 +7,26 @@ const AppSettings* HeaderBar::appSettings = nullptr;
 
 namespace
 {
+    constexpr Page MENU_PAGES[] = {
+        Page::Weather,
+        Page::Aircraft,
+        Page::LiveSpots,
+        Page::Solar,
+        Page::Satellite,
+        Page::Pota,
+        Page::Settings
+    };
+
+    constexpr const char* MENU_LABELS[] = {
+        "WEATHER",
+        "AIRCRAFT",
+        "LIVE SPOTS",
+        "SOLAR CONDITIONS",
+        "SATELLITES",
+        "POTA SPOTS",
+        "SETTINGS"
+    };
+
     lv_obj_t* createLine(lv_obj_t* parent, int16_t x, int16_t y, int16_t width)
     {
         lv_obj_t* line = lv_obj_create(parent);
@@ -48,7 +68,7 @@ void HeaderBar::create(lv_obj_t* parent, ClockService& clockServiceReference,
     createLine(menuTarget, 15, 14, 30);
     createLine(menuTarget, 15, 24, 30);
     createLine(menuTarget, 15, 34, 30);
-    lv_obj_add_event_cb(menuTarget, settingsEventHandler, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(menuTarget, menuEventHandler, LV_EVENT_CLICKED, this);
 
     identityLabel = Theme::createLabel(container, "-- - ----", Theme::COLOR_TEXT,
                                        &lv_font_montserrat_28);
@@ -83,7 +103,49 @@ void HeaderBar::create(lv_obj_t* parent, ClockService& clockServiceReference,
                                       &lv_font_montserrat_20);
     lv_obj_align(utcTimeLabel, LV_ALIGN_RIGHT_MID, -14, 0);
 
+    createMenu(parent);
+
     update();
+}
+
+void HeaderBar::createMenu(lv_obj_t* parent)
+{
+    menuOverlay = lv_obj_create(parent);
+    lv_obj_set_pos(menuOverlay, 0, Theme::HEADER_HEIGHT);
+    lv_obj_set_size(menuOverlay, Theme::SCREEN_WIDTH, Theme::FOOTER_TOP - Theme::HEADER_HEIGHT);
+    lv_obj_set_style_bg_color(menuOverlay, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(menuOverlay, LV_OPA_70, LV_PART_MAIN);
+    lv_obj_set_style_border_width(menuOverlay, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(menuOverlay, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(menuOverlay, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(menuOverlay, menuOverlayEventHandler, LV_EVENT_CLICKED, this);
+
+    lv_obj_t* menuPanel = lv_obj_create(menuOverlay);
+    lv_obj_set_pos(menuPanel, 8, 8);
+    lv_obj_set_size(menuPanel, 276, 366);
+    Theme::configurePanel(menuPanel);
+    lv_obj_t* title = Theme::createLabel(menuPanel, "MISSION CONTROL MENU", Theme::COLOR_PRIMARY);
+    lv_obj_set_pos(title, 4, 0);
+
+    for (uint8_t index = 0; index < MENU_ITEM_COUNT; ++index)
+    {
+        lv_obj_t* button = lv_btn_create(menuPanel);
+        menuButtons[index] = button;
+        lv_obj_set_pos(button, 0, 28 + index * 44);
+        lv_obj_set_size(button, 248, 39);
+        lv_obj_set_style_bg_color(button, Theme::color(Theme::COLOR_PANEL), LV_PART_MAIN);
+        lv_obj_set_style_border_color(button, Theme::color(Theme::COLOR_PANEL_BORDER), LV_PART_MAIN);
+        lv_obj_set_style_border_width(button, 1, LV_PART_MAIN);
+        lv_obj_set_style_radius(button, 4, LV_PART_MAIN);
+        lv_obj_set_style_pad_all(button, 6, LV_PART_MAIN);
+        lv_obj_add_event_cb(button, menuItemEventHandler, LV_EVENT_CLICKED, this);
+        lv_obj_t* label = Theme::createLabel(button, MENU_LABELS[index], Theme::COLOR_TEXT);
+        lv_obj_align(label, LV_ALIGN_LEFT_MID, 4, 0);
+        lv_obj_t* arrow = Theme::createLabel(button, LV_SYMBOL_RIGHT, Theme::COLOR_TEXT_DIM);
+        lv_obj_align(arrow, LV_ALIGN_RIGHT_MID, -4, 0);
+    }
+
+    lv_obj_add_flag(menuOverlay, LV_OBJ_FLAG_HIDDEN);
 }
 
 void HeaderBar::setSettingsCallback(SettingsCallback callback)
@@ -91,10 +153,59 @@ void HeaderBar::setSettingsCallback(SettingsCallback callback)
     settingsCallback = callback;
 }
 
+void HeaderBar::setNavigationCallback(NavigationCallback callback)
+{
+    navigationCallback = callback;
+}
+
 void HeaderBar::settingsEventHandler(lv_event_t* event)
 {
     HeaderBar* self = static_cast<HeaderBar*>(lv_event_get_user_data(event));
-    if (self != nullptr && self->settingsCallback != nullptr) self->settingsCallback();
+    if (self == nullptr) return;
+    if (self->settingsCallback != nullptr) self->settingsCallback();
+    else if (self->navigationCallback != nullptr) self->navigationCallback(Page::Settings);
+}
+
+void HeaderBar::menuEventHandler(lv_event_t* event)
+{
+    HeaderBar* self = static_cast<HeaderBar*>(lv_event_get_user_data(event));
+    if (self == nullptr || self->menuOverlay == nullptr) return;
+    if (lv_obj_has_flag(self->menuOverlay, LV_OBJ_FLAG_HIDDEN)) self->showMenu();
+    else self->hideMenu();
+}
+
+void HeaderBar::menuItemEventHandler(lv_event_t* event)
+{
+    HeaderBar* self = static_cast<HeaderBar*>(lv_event_get_user_data(event));
+    if (self == nullptr) return;
+    lv_obj_t* target = lv_event_get_target(event);
+    for (uint8_t index = 0; index < MENU_ITEM_COUNT; ++index)
+    {
+        if (self->menuButtons[index] != target) continue;
+        self->hideMenu();
+        if (self->navigationCallback != nullptr)
+            self->navigationCallback(MENU_PAGES[index]);
+        else if (MENU_PAGES[index] == Page::Settings && self->settingsCallback != nullptr)
+            self->settingsCallback();
+        return;
+    }
+}
+
+void HeaderBar::menuOverlayEventHandler(lv_event_t* event)
+{
+    HeaderBar* self = static_cast<HeaderBar*>(lv_event_get_user_data(event));
+    if (self != nullptr && lv_event_get_target(event) == self->menuOverlay) self->hideMenu();
+}
+
+void HeaderBar::showMenu()
+{
+    lv_obj_clear_flag(menuOverlay, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(menuOverlay);
+}
+
+void HeaderBar::hideMenu()
+{
+    if (menuOverlay != nullptr) lv_obj_add_flag(menuOverlay, LV_OBJ_FLAG_HIDDEN);
 }
 
 void HeaderBar::update()

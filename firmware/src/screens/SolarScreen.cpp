@@ -1,4 +1,5 @@
 #include "SolarScreen.h"
+#include "../services/NetworkUpdateState.h"
 #include <WiFi.h>
 #include <time.h>
 #include "../ui/Theme.h"
@@ -68,6 +69,9 @@ void SolarScreen::begin(ClockService& clockService, SolarService& service)
     headerBar.setSettingsCallback([this]() {
         if (navigationCallback != nullptr) navigationCallback(Page::Settings);
     });
+    headerBar.setNavigationCallback([this](Page page) {
+        if (navigationCallback != nullptr) navigationCallback(page);
+    });
     lv_obj_t* backButton = lv_btn_create(screen);
     lv_obj_set_pos(backButton, 8, Theme::CONTENT_TOP);
     lv_obj_set_size(backButton, 116, 36);
@@ -117,6 +121,7 @@ void SolarScreen::setNavigationCallback(NavigationCallback callback) { navigatio
 void SolarScreen::update()
 {
     headerBar.update();
+    if (NetworkUpdateState::isBusy()) return;
     if (solarService == nullptr) return;
     if (!solarService->isValid())
     {

@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <math.h>
 #include <time.h>
 
@@ -100,48 +101,69 @@ void SatelliteService::fetchNextTle()
 
 bool SatelliteService::fetchTle(uint8_t index)
 {
-    // CelesTrak periodically becomes unreachable from embedded clients. The
-    // SatNOGS DB exposes the same current GP elements by NORAD catalog number
-    // and identifies the upstream source in its response.
-    const String url = String("https://db.satnogs.org/api/tle/?norad_cat_id=") +
-        DEFINITIONS[index].catalogNumber + "&format=json";
-    HTTPClient http;
-    http.setConnectTimeout(REQUEST_TIMEOUT_MS);
-    http.setTimeout(REQUEST_TIMEOUT_MS);
-    http.setUserAgent("MissionControl-ESP32/1.0");
-    if (!http.begin(url))
+    String name;
+    String line1;
+    String line2;
+    bool tleReceived = false;
+
+    // SatNOGS is reachable from the station network while CelesTrak currently
+    // times out from both the ESP32 and a desktop on the same connection.
+    // Fetch one compact JSON TLE record by NORAD catalog ID.
     {
-        lastError = "Unable to start TLE request";
+        const String url = String("https://db.satnogs.org/api/tle/?norad_cat_id=") +
+            DEFINITIONS[index].catalogNumber + "&format=json";
+        WiFiClientSecure client;
+        client.setInsecure();
+        client.setHandshakeTimeout(5);
+        client.setTimeout(REQUEST_TIMEOUT_MS);
+        HTTPClient http;
+        http.setConnectTimeout(REQUEST_TIMEOUT_MS);
+        http.setTimeout(REQUEST_TIMEOUT_MS);
+        http.setUserAgent("MissionControl-ESP32/1.0");
+        Serial.print("[SatelliteService] Fetching TLE ");
+        Serial.print(index + 1);
+        Serial.print("/");
+        Serial.print(SATELLITE_COUNT);
+        Serial.print(": ");
+        Serial.println(DEFINITIONS[index].name);
+        if (http.begin(client, url))
+        {
+            const int responseCode = http.GET();
+            Serial.print("[SatelliteService] SatNOGS response: ");
+            Serial.println(responseCode);
+            if (responseCode >= 200 && responseCode < 300)
+            {
+                JsonDocument document;
+                const DeserializationError error =
+                    deserializeJson(document, http.getStream());
+                JsonArrayConst results = document.as<JsonArrayConst>();
+                if (!error && !results.isNull() && results.size() > 0)
+                {
+                    name = String(results[0]["tle0"] | DEFINITIONS[index].name);
+                    line1 = String(results[0]["tle1"] | "");
+                    line2 = String(results[0]["tle2"] | "");
+                    tleReceived = true;
+                }
+                else lastError = "Invalid SatNOGS TLE response";
+            }
+            else
+            {
+                lastError = String("SatNOGS TLE HTTP ") + responseCode;
+            }
+            http.end();
+        }
+        else
+        {
+            lastError = "Unable to start SatNOGS request";
+        }
+    }
+
+    if (!tleReceived)
+    {
+        if (lastError.isEmpty()) lastError = "Unable to connect to TLE sources";
         return false;
     }
 
-    const int responseCode = http.GET();
-    if (responseCode < 200 || responseCode >= 300)
-    {
-        lastError = String("SatNOGS TLE HTTP ") + responseCode;
-        http.end();
-        return false;
-    }
-
-    JsonDocument document;
-    const DeserializationError error = deserializeJson(document, http.getStream());
-    http.end();
-    if (error)
-    {
-        lastError = String("TLE data error: ") + error.c_str();
-        return false;
-    }
-
-    JsonArrayConst results = document.as<JsonArrayConst>();
-    if (results.isNull() || results.size() == 0)
-    {
-        lastError = String("No TLE for ") + DEFINITIONS[index].name;
-        return false;
-    }
-
-    String name = String(results[0]["tle0"] | DEFINITIONS[index].name);
-    String line1 = String(results[0]["tle1"] | "");
-    String line2 = String(results[0]["tle2"] | "");
     if (name.startsWith("0 ")) name.remove(0, 2);
     trimLine(name);
     trimLine(line1);
@@ -175,17 +197,25 @@ bool SatelliteService::fetchRadioData(uint8_t index)
 
     const String url = String("https://db.satnogs.org/api/transmitters/?satellite__norad_cat_id=") +
         satellite.catalogNumber + "&format=json";
+    WiFiClientSecure client;
+    client.setInsecure();
+    client.setHandshakeTimeout(5);
+    client.setTimeout(REQUEST_TIMEOUT_MS);
     HTTPClient http;
     http.setConnectTimeout(REQUEST_TIMEOUT_MS);
     http.setTimeout(REQUEST_TIMEOUT_MS);
     http.setUserAgent("MissionControl-ESP32/1.0");
-    if (!http.begin(url))
+    Serial.print("[SatelliteService] Fetching radio data for ");
+    Serial.println(satellite.name);
+    if (!http.begin(client, url))
     {
         satellite.radioError = "Unable to start SatNOGS request";
         satellite.radioReady = true;
         return false;
     }
     const int responseCode = http.GET();
+    Serial.print("[SatelliteService] SatNOGS radio response: ");
+    Serial.println(responseCode);
     if (responseCode < 200 || responseCode >= 300)
     {
         satellite.radioError = String("SatNOGS HTTP ") + responseCode;

@@ -1,4 +1,5 @@
 #include "DashboardScreen.h"
+#include "../services/NetworkUpdateState.h"
 
 namespace
 {
@@ -216,6 +217,11 @@ void DashboardScreen::begin(
                 navigationCallback(Page::Settings);
             }
         });
+    headerBar.setNavigationCallback(
+        [this](Page page)
+        {
+            if (navigationCallback != nullptr) navigationCallback(page);
+        });
 
     createSectionDivider(
         screen,
@@ -349,9 +355,8 @@ void DashboardScreen::update()
      * Allow the weather service to advance through its states:
      * waiting for Wi-Fi, resolving the station and downloading data.
      */
-    weatherService->update();
-
     headerBar.update();
+    if (NetworkUpdateState::isBusy()) return;
     weatherPanel.update();
     aircraftPanel.update();
     satellitePanel.update();
