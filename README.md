@@ -7,15 +7,12 @@ A touchscreen information console for the ham shack.
 A custom ESP32-S3 dashboard combining:
 
 - Local and UTC clocks
-- Weather and radar
-- Air quality
-- Space weather
+- Weather
+- Solar Conditions
 - Satellite tracking
 - Flight tracking
-- IC-7300 integration
-- Microsoft 365 calendar
-- Ham radio tools
-
+- POTA Spots
+- Live Spots
 ## Hardware
 
 Planned:
