@@ -1,14 +1,13 @@
 #include "DashboardScreen.h"
+#include <WiFi.h>
 #include "../services/NetworkUpdateState.h"
+#include "../ui/DashboardIcons.h"
+#include "../ui/Theme.h"
 
 namespace
 {
-    constexpr int16_t SCREEN_WIDTH = 800;
-    constexpr int16_t SCREEN_HEIGHT = 480;
-
-    constexpr int16_t HEADER_HEIGHT = 64;
     constexpr int16_t PANEL_GAP = 8;
-    constexpr int16_t PANEL_TOP = 72;
+    constexpr int16_t PANEL_TOP = Theme::CONTENT_TOP;
     constexpr int16_t PANEL_HEIGHT = 179;
 
     constexpr int16_t LEFT_PANEL_X = 8;
@@ -19,161 +18,18 @@ namespace
     constexpr int16_t CENTER_PANEL_WIDTH = 252;
     constexpr int16_t RIGHT_PANEL_WIDTH = 264;
 
-    lv_color_t colorFromHex(uint32_t value)
+    void mixSignature(uint32_t& signature, uint32_t value)
     {
-        return lv_color_hex(value);
+        signature ^= value;
+        signature *= 16777619UL;
     }
 
-    void configureScreen(lv_obj_t* object)
+    void mixSignature(uint32_t& signature, const String& value)
     {
-        lv_obj_set_style_bg_color(
-            object,
-            colorFromHex(0x11191D),
-            LV_PART_MAIN);
-
-        lv_obj_set_style_bg_opa(
-            object,
-            LV_OPA_COVER,
-            LV_PART_MAIN);
-
-        lv_obj_clear_flag(
-            object,
-            LV_OBJ_FLAG_SCROLLABLE);
+        for (size_t index = 0; index < value.length(); ++index)
+            mixSignature(signature, static_cast<uint8_t>(value[index]));
     }
 
-    void configurePanel(lv_obj_t* panel)
-    {
-        lv_obj_set_style_bg_color(
-            panel,
-            colorFromHex(0x02080C),
-            LV_PART_MAIN);
-
-        lv_obj_set_style_bg_opa(
-            panel,
-            LV_OPA_COVER,
-            LV_PART_MAIN);
-
-        lv_obj_set_style_border_color(
-            panel,
-            colorFromHex(0x1D7891),
-            LV_PART_MAIN);
-
-        lv_obj_set_style_border_width(
-            panel,
-            1,
-            LV_PART_MAIN);
-
-        lv_obj_set_style_radius(
-            panel,
-            8,
-            LV_PART_MAIN);
-
-        lv_obj_set_style_pad_all(
-            panel,
-            10,
-            LV_PART_MAIN);
-
-        lv_obj_clear_flag(
-            panel,
-            LV_OBJ_FLAG_SCROLLABLE);
-    }
-
-    lv_obj_t* createLabel(
-        lv_obj_t* parent,
-        const char* text,
-        uint32_t color)
-    {
-        lv_obj_t* label = lv_label_create(parent);
-
-        lv_label_set_text(
-            label,
-            text);
-
-        lv_obj_set_style_text_color(
-            label,
-            colorFromHex(color),
-            LV_PART_MAIN);
-
-        lv_obj_set_style_text_font(
-            label,
-            &lv_font_montserrat_14,
-            LV_PART_MAIN);
-
-        return label;
-    }
-
-    lv_obj_t* createPanel(
-        lv_obj_t* parent,
-        int16_t x,
-        int16_t y,
-        int16_t width,
-        int16_t height,
-        const char* title)
-    {
-        lv_obj_t* panel = lv_obj_create(parent);
-
-        lv_obj_set_pos(
-            panel,
-            x,
-            y);
-
-        lv_obj_set_size(
-            panel,
-            width,
-            height);
-
-        configurePanel(panel);
-
-        lv_obj_t* titleLabel = createLabel(
-            panel,
-            title,
-            0x32C7E8);
-
-        lv_obj_align(
-            titleLabel,
-            LV_ALIGN_TOP_LEFT,
-            0,
-            0);
-
-        return panel;
-    }
-
-    void createSectionDivider(
-        lv_obj_t* parent,
-        int16_t y,
-        int16_t width)
-    {
-        lv_obj_t* divider = lv_obj_create(parent);
-
-        lv_obj_set_pos(
-            divider,
-            0,
-            y);
-
-        lv_obj_set_size(
-            divider,
-            width,
-            1);
-
-        lv_obj_set_style_bg_color(
-            divider,
-            colorFromHex(0x1D7891),
-            LV_PART_MAIN);
-
-        lv_obj_set_style_bg_opa(
-            divider,
-            LV_OPA_COVER,
-            LV_PART_MAIN);
-
-        lv_obj_set_style_border_width(
-            divider,
-            0,
-            LV_PART_MAIN);
-
-        lv_obj_clear_flag(
-            divider,
-            LV_OBJ_FLAG_SCROLLABLE);
-    }
 }
 
 void DashboardScreen::begin(
@@ -194,21 +50,19 @@ void DashboardScreen::begin(
     weatherService = &weatherServiceReference;
     aircraftService = &aircraftServiceReference;
     satelliteService = &satelliteServiceReference;
+    solarService = &solarServiceReference;
+    liveSpotsService = &liveSpotsServiceReference;
+    potaService = &potaServiceReference;
 
     screen = lv_obj_create(nullptr);
 
-    lv_obj_set_size(
-        screen,
-        SCREEN_WIDTH,
-        SCREEN_HEIGHT);
-
-    configureScreen(screen);
+    Theme::configureScreen(screen);
 
     headerBar.create(
         screen,
         clockServiceReference,
-        SCREEN_WIDTH,
-        HEADER_HEIGHT);
+        Theme::SCREEN_WIDTH,
+        Theme::HEADER_HEIGHT);
     headerBar.setSettingsCallback(
         [this]()
         {
@@ -222,11 +76,6 @@ void DashboardScreen::begin(
         {
             if (navigationCallback != nullptr) navigationCallback(page);
         });
-
-    createSectionDivider(
-        screen,
-        HEADER_HEIGHT,
-        SCREEN_WIDTH);
 
     /*
      * Top-left: Weather
@@ -345,8 +194,17 @@ void DashboardScreen::show()
         return;
     }
 
-    lv_scr_load(screen);
+    // The dashboard is substantially more complex than a detail page. Updating
+    // all six panels after loading caused two visible full-screen redraw waves
+    // on the single-buffered RGB panel. Settle content and layout while this
+    // screen is still hidden, then expose one complete frame.
     update();
+    lv_obj_update_layout(screen);
+    DashboardIcons::warmCache(
+        weatherService != nullptr && weatherService->isValid()
+            ? weatherService->getCurrentWeather().condition
+            : String());
+    lv_scr_load(screen);
 }
 
 void DashboardScreen::update()
@@ -357,12 +215,101 @@ void DashboardScreen::update()
      */
     headerBar.update();
     if (NetworkUpdateState::isBusy()) return;
+
+    // LVGL invalidates labels and images even when the new value is identical.
+    // The dashboard has six panels, so rewriting them every second caused a
+    // broad redraw that the partial RGB buffer exposed as horizontal shimmer.
+    const uint32_t signature = calculatePanelSignature();
+    if (signature == renderedPanelSignature) return;
+    renderedPanelSignature = signature;
+
     weatherPanel.update();
     aircraftPanel.update();
     satellitePanel.update();
     solarPanel.update();
     liveSpotsPanel.update();
     potaPanel.update();
+}
+
+uint32_t DashboardScreen::calculatePanelSignature() const
+{
+    uint32_t signature = 2166136261UL;
+    mixSignature(signature, static_cast<uint32_t>(WiFi.status()));
+
+    if (weatherService != nullptr)
+    {
+        mixSignature(signature, weatherService->isValid());
+        mixSignature(signature, weatherService->isUpdating());
+        mixSignature(signature, weatherService->getDataRevision());
+        if (!weatherService->isValid())
+            mixSignature(signature, weatherService->getLastError());
+    }
+
+    if (aircraftService != nullptr)
+    {
+        mixSignature(signature, aircraftService->isValid());
+        mixSignature(signature, aircraftService->isUpdating());
+        mixSignature(signature, aircraftService->getAircraftCount());
+        mixSignature(signature, aircraftService->getLastUpdateTime());
+        if (!aircraftService->isValid())
+            mixSignature(signature, aircraftService->getLastError());
+    }
+
+    if (satelliteService != nullptr)
+    {
+        mixSignature(signature, satelliteService->isValid());
+        mixSignature(signature, satelliteService->isUpdating());
+        if (!satelliteService->isValid())
+        {
+            mixSignature(signature, satelliteService->getLastError());
+        }
+        else
+        {
+            const SatelliteData* pass = satelliteService->getNextPass();
+            if (pass != nullptr)
+            {
+                mixSignature(signature, pass->name);
+                mixSignature(signature, pass->aosTime);
+            }
+            for (uint8_t index = 0;
+                 index < SatelliteService::SATELLITE_COUNT; ++index)
+            {
+                mixSignature(
+                    signature,
+                    satelliteService->getSatellite(index).visible ? 1U : 0U);
+            }
+        }
+    }
+
+    if (solarService != nullptr)
+    {
+        mixSignature(signature, solarService->isValid());
+        mixSignature(signature, solarService->isUpdating());
+        if (solarService->isValid())
+            mixSignature(signature, solarService->getData().updatedAt);
+        else
+            mixSignature(signature, solarService->getLastError());
+    }
+
+    if (liveSpotsService != nullptr)
+    {
+        mixSignature(signature, liveSpotsService->isValid());
+        mixSignature(signature, liveSpotsService->isUpdating());
+        mixSignature(signature, liveSpotsService->getTotalSpotCount());
+        if (!liveSpotsService->isValid())
+            mixSignature(signature, liveSpotsService->getLastError());
+    }
+
+    if (potaService != nullptr)
+    {
+        mixSignature(signature, potaService->isValid());
+        mixSignature(signature, potaService->isUpdating());
+        mixSignature(signature, potaService->getSpotCount());
+        if (!potaService->isValid())
+            mixSignature(signature, potaService->getLastError());
+    }
+
+    return signature;
 }
 
 void DashboardScreen::updateTimerCallback(lv_timer_t* timer)

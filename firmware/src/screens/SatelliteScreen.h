@@ -14,6 +14,7 @@ public:
     using NavigationCallback = std::function<void(Page)>;
     void begin(ClockService& clockService, SatelliteService& satelliteService);
     void show();
+    void release();
     void setNavigationCallback(NavigationCallback callback);
 
 private:
@@ -30,6 +31,7 @@ private:
     lv_obj_t* passScroller = nullptr;
     lv_obj_t* passRowButtons[SatelliteService::SATELLITE_COUNT] = {};
     lv_obj_t* passRowLabels[SatelliteService::SATELLITE_COUNT] = {};
+    lv_obj_t* passRowSeparators[SatelliteService::SATELLITE_COUNT] = {};
     uint8_t passRowSatelliteIndices[SatelliteService::SATELLITE_COUNT] = {};
     lv_obj_t* targets[SatelliteService::SATELLITE_COUNT] = {};
     lv_obj_t* targetLabels[SatelliteService::SATELLITE_COUNT] = {};
@@ -40,6 +42,7 @@ private:
     lv_obj_t* detailIdentityLabel = nullptr;
     lv_obj_t* detailPositionLabel = nullptr;
     lv_obj_t* detailPassLabel = nullptr;
+    lv_obj_t* detailRadioLabel = nullptr;
     uint32_t selectedCatalogNumber = 0;
     SatelliteService* satelliteService = nullptr;
     NavigationCallback navigationCallback;

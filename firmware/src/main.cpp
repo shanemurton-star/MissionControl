@@ -1,4 +1,7 @@
 #include <Arduino.h>
+#include <esp_heap_caps.h>
+#include <WiFiClient.h>
+#include <lwip/dns.h>
 
 #include "config/Version.h"
 #include "hardware/DisplayService.h"
@@ -30,15 +33,64 @@ namespace
     StaticTask_t networkUpdateTaskBuffer;
     StackType_t networkUpdateTaskStack[6144];
 
+    void setDnsServer(uint8_t index, const IPAddress& address)
+    {
+        ip_addr_t server;
+        IP_ADDR4(
+            &server,
+            address[0], address[1], address[2], address[3]);
+        dns_setserver(index, &server);
+    }
+
+    void checkPostDisplayNetworking()
+    {
+        if (!wifiService.isNetworkReady()) return;
+
+        Serial.println("Post-display network check...");
+        WiFiClient routeClient;
+        const bool rawTcpReady = routeClient.connect(
+            IPAddress(1, 1, 1, 1), 443, 5000);
+        routeClient.stop();
+        Serial.println(rawTcpReady
+            ? "PASS: post-display raw TCP reached 1.1.1.1:443"
+            : "FAIL: post-display raw TCP could not reach 1.1.1.1:443");
+
+        if (!rawTcpReady) return;
+
+        const IPAddress dhcpDns = WiFi.dnsIP(0);
+        setDnsServer(0, IPAddress(1, 1, 1, 1));
+        setDnsServer(1, IPAddress(8, 8, 8, 8));
+        Serial.println("Testing public DNS after display startup...");
+        IPAddress resolved;
+        if (WiFi.hostByName("api.zippopotam.us", resolved) == 1)
+        {
+            Serial.print("PASS: public DNS api.zippopotam.us -> ");
+            Serial.println(resolved);
+            Serial.println("Using DNS primary 1.1.1.1, backup 8.8.8.8");
+            return;
+        }
+
+        setDnsServer(0, dhcpDns);
+        setDnsServer(1, IPAddress(0, 0, 0, 0));
+        Serial.println("FAIL: public DNS unavailable; restored DHCP DNS");
+    }
+
     void networkUpdateTask(void*)
     {
         uint8_t serviceSlot = 0;
 
         for (;;)
         {
-            if (wifiService.isNetworkReady() && clockService.isSynchronized())
+            if (!NetworkUpdateState::isPaused() &&
+                wifiService.isNetworkReady() && clockService.isSynchronized())
             {
                 NetworkUpdateState::setBusy(true);
+                if (NetworkUpdateState::isPaused())
+                {
+                    NetworkUpdateState::setBusy(false);
+                    vTaskDelay(pdMS_TO_TICKS(50));
+                    continue;
+                }
                 switch (serviceSlot)
                 {
                     case 0: weatherService.update(); break;
@@ -72,7 +124,7 @@ void setup()
     Serial.println(__TIME__);
     Serial.print("Firmware version: ");
     Serial.println(Version::FIRMWARE);
-    Serial.println("Network revision: UI-23 / reduced satellite memory");
+    Serial.println("Network revision: WIFI-32 / boot-tested WiFi settings");
 
     /*
      * Load all persistent settings before starting any
@@ -110,6 +162,29 @@ void setup()
     {
         wifiService.update();
         delay(100);
+    }
+
+    if (settingsService.hasPendingWiFiSettings())
+    {
+        if (wifiService.isNetworkReady())
+        {
+            settingsService.commitPendingWiFiSettings();
+        }
+        else
+        {
+            Serial.println("Candidate WiFi failed boot test; restoring previous network...");
+            settingsService.discardPendingWiFiSettings();
+            delay(500);
+            ESP.restart();
+        }
+    }
+
+    else if (wifiService.isNetworkReady() && settingsService.didWiFiCandidateFail())
+    {
+        // A previous candidate failed, but the stored fallback has now proved
+        // that it can connect. Do not let that historical warning mask ZIP,
+        // callsign, grid, or other Settings feedback indefinitely.
+        settingsService.clearWiFiCandidateFailure();
     }
 
     if (wifiService.isNetworkReady())
@@ -182,10 +257,18 @@ void setup()
             }
         }
 
-        solarService.update();
+        // Load the numeric solar data now, but leave the large JPEG decoder
+        // for the dedicated background worker created after display startup.
+        solarService.update(false);
         liveSpotsService.update();
         potaService.update();
         Serial.println("Initial panel data loading complete.");
+        Serial.print("[Memory] after initial network data internal free=");
+        Serial.print(heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+        Serial.print(" largest=");
+        Serial.print(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+        Serial.print(" PSRAM free=");
+        Serial.println(heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     }
 
     if (displayService.begin(
@@ -208,6 +291,8 @@ void setup()
             "ERROR: Display service failed to initialize.");
     }
 
+    checkPostDisplayNetworking();
+
     networkUpdateTaskHandle = xTaskCreateStaticPinnedToCore(
         networkUpdateTask,
         "panel-network",
@@ -223,6 +308,12 @@ void setup()
         : "ERROR: Unable to start background panel network worker.");
     Serial.print("Free heap after UI and worker: ");
     Serial.println(ESP.getFreeHeap());
+    Serial.print("Largest internal heap block: ");
+    Serial.println(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+    Serial.print("Total free internal heap: ");
+    Serial.println(heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+    Serial.print("Free PSRAM after UI and worker: ");
+    Serial.println(heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
 }
 
 void loop()

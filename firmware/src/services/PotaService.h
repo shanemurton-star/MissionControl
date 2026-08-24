@@ -9,6 +9,7 @@ class PotaService
 {
 public:
     static constexpr uint8_t MAX_SPOTS = 40;
+    static constexpr uint8_t MAX_NEAREST_PARKS = 10;
     static constexpr float ACTIVE_RADIUS_MILES = 100.0f;
 
     void begin(const AppSettings& settings);
@@ -17,6 +18,8 @@ public:
     bool isUpdating() const;
     uint8_t getSpotCount() const;
     const PotaSpotData& getSpot(uint8_t index) const;
+    uint8_t getNearestParkCount() const;
+    const PotaSpotData& getNearestPark(uint8_t index) const;
     const String& getLastError() const;
 
 private:
@@ -26,13 +29,16 @@ private:
 
     void fetchSpots();
     void insertSpot(const PotaSpotData& spot);
+    void insertNearestPark(const PotaSpotData& spot);
     float distanceMiles(double latitude, double longitude) const;
     static bool timeReached(uint32_t target);
 
     double homeLatitude = 0.0;
     double homeLongitude = 0.0;
     PotaSpotData spots[MAX_SPOTS];
+    PotaSpotData nearestParks[MAX_NEAREST_PARKS];
     uint8_t spotCount = 0;
+    uint8_t nearestParkCount = 0;
     uint32_t nextUpdateMs = 0;
     bool valid = false;
     bool updating = false;

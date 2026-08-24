@@ -14,6 +14,7 @@ public:
 
     bool isValid() const;
     bool isUpdating() const;
+    uint32_t getDataRevision() const;
 
     const WeatherData& getCurrentWeather() const;
     const ForecastData& getForecast() const;
@@ -103,6 +104,7 @@ private:
     String lastError;
 
     unsigned long nextActionMs = 0;
+    uint32_t dataRevision = 0;
 
     bool updating = false;
 };

@@ -42,6 +42,13 @@ public:
      */
     bool hasWiFiCredentials() const;
 
+    bool stageWiFiSettings(const AppSettings& candidate);
+    bool hasPendingWiFiSettings() const;
+    bool commitPendingWiFiSettings();
+    bool discardPendingWiFiSettings();
+    bool didWiFiCandidateFail() const;
+    void clearWiFiCandidateFailure();
+
 private:
     static constexpr const char* NVS_NAMESPACE =
         "missionctrl";
@@ -52,6 +59,8 @@ private:
     AppSettings currentSettings;
 
     bool initialized = false;
+    bool pendingWiFiSettings = false;
+    bool wifiCandidateFailed = false;
 
     void loadDefaults();
     void loadFromStorage();

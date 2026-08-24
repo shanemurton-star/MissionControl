@@ -66,10 +66,11 @@ void SatelliteScreen::begin(ClockService& clockService, SatelliteService& servic
 
     lv_obj_t* backButton = lv_btn_create(screen);
     lv_obj_set_pos(backButton, 8, Theme::CONTENT_TOP);
-    lv_obj_set_size(backButton, 116, 36);
+    lv_obj_set_size(backButton, 116, 30);
     lv_obj_set_style_bg_color(backButton, Theme::color(Theme::COLOR_PANEL), LV_PART_MAIN);
     lv_obj_set_style_border_color(backButton, Theme::color(Theme::COLOR_PANEL_BORDER), LV_PART_MAIN);
     lv_obj_set_style_border_width(backButton, 1, LV_PART_MAIN);
+    lv_obj_set_style_radius(backButton, 8, LV_PART_MAIN);
     lv_obj_add_event_cb(backButton, backButtonEventHandler, LV_EVENT_CLICKED, this);
     lv_obj_center(Theme::createLabel(backButton, LV_SYMBOL_LEFT " DASHBOARD", Theme::COLOR_PRIMARY));
     lv_obj_t* title = Theme::createLabel(screen, "SATELLITE PASS DETAIL", Theme::COLOR_PRIMARY);
@@ -112,7 +113,8 @@ void SatelliteScreen::begin(ClockService& clockService, SatelliteService& servic
         lv_obj_add_flag(targetLabels[i], LV_OBJ_FLAG_HIDDEN);
     }
 
-    lv_obj_t* passes = Theme::createPanel(screen, 516, 110, 276, 328, "UPCOMING PASSES  |  TOUCH FOR DETAIL");
+    lv_obj_t* passes = Theme::createPanel(
+        screen, 516, 110, 276, 328, "UPCOMING PASSES");
     passScroller = lv_obj_create(passes);
     lv_obj_set_pos(passScroller, 0, 28);
     lv_obj_set_size(passScroller, 252, 288);
@@ -128,18 +130,45 @@ void SatelliteScreen::begin(ClockService& clockService, SatelliteService& servic
     {
         passRowButtons[row] = lv_btn_create(passScroller);
         lv_obj_set_pos(passRowButtons[row], 0, row * 76);
-        lv_obj_set_size(passRowButtons[row], 242, 70);
-        lv_obj_set_style_bg_color(passRowButtons[row], Theme::color(Theme::COLOR_PANEL), LV_PART_MAIN);
-        lv_obj_set_style_border_color(passRowButtons[row], Theme::color(Theme::COLOR_PANEL_BORDER), LV_PART_MAIN);
-        lv_obj_set_style_border_width(passRowButtons[row], 1, LV_PART_MAIN);
-        lv_obj_set_style_radius(passRowButtons[row], 4, LV_PART_MAIN);
+        lv_obj_set_size(passRowButtons[row], 242, 76);
+        lv_obj_set_style_bg_opa(
+            passRowButtons[row], LV_OPA_TRANSP, LV_PART_MAIN);
+        lv_obj_set_style_bg_color(
+            passRowButtons[row], Theme::color(Theme::COLOR_PRIMARY),
+            LV_PART_MAIN | LV_STATE_PRESSED);
+        lv_obj_set_style_bg_opa(
+            passRowButtons[row], LV_OPA_20,
+            LV_PART_MAIN | LV_STATE_PRESSED);
+        lv_obj_set_style_border_width(passRowButtons[row], 0, LV_PART_MAIN);
+        lv_obj_set_style_outline_width(passRowButtons[row], 0, LV_PART_MAIN);
+        lv_obj_set_style_shadow_width(passRowButtons[row], 0, LV_PART_MAIN);
+        lv_obj_set_style_radius(passRowButtons[row], 0, LV_PART_MAIN);
         lv_obj_set_style_pad_all(passRowButtons[row], 6, LV_PART_MAIN);
         lv_obj_add_event_cb(passRowButtons[row], satelliteRowEventHandler, LV_EVENT_CLICKED, this);
         passRowLabels[row] = Theme::createLabel(
             passRowButtons[row], "", Theme::COLOR_TEXT_MUTED, &lv_font_montserrat_14);
         lv_obj_set_width(passRowLabels[row], 228);
         lv_obj_align(passRowLabels[row], LV_ALIGN_LEFT_MID, 0, 0);
+
+        passRowSeparators[row] = lv_obj_create(passScroller);
+        lv_obj_set_pos(passRowSeparators[row], 0, row * 76 + 75);
+        lv_obj_set_size(passRowSeparators[row], 242, 1);
+        lv_obj_set_style_bg_color(
+            passRowSeparators[row],
+            Theme::color(Theme::COLOR_PANEL_BORDER), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(
+            passRowSeparators[row], LV_OPA_70, LV_PART_MAIN);
+        lv_obj_set_style_border_width(
+            passRowSeparators[row], 0, LV_PART_MAIN);
+        lv_obj_set_style_pad_all(
+            passRowSeparators[row], 0, LV_PART_MAIN);
+        lv_obj_clear_flag(
+            passRowSeparators[row], LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_clear_flag(
+            passRowSeparators[row], LV_OBJ_FLAG_CLICKABLE);
+
         lv_obj_add_flag(passRowButtons[row], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(passRowSeparators[row], LV_OBJ_FLAG_HIDDEN);
     }
 
     detailScreen = lv_obj_create(nullptr);
@@ -153,38 +182,77 @@ void SatelliteScreen::begin(ClockService& clockService, SatelliteService& servic
     });
     lv_obj_t* detailBackButton = lv_btn_create(detailScreen);
     lv_obj_set_pos(detailBackButton, 8, Theme::CONTENT_TOP);
-    lv_obj_set_size(detailBackButton, 140, 36);
+    lv_obj_set_size(detailBackButton, 140, 30);
     lv_obj_set_style_bg_color(detailBackButton, Theme::color(Theme::COLOR_PANEL), LV_PART_MAIN);
     lv_obj_set_style_border_color(detailBackButton, Theme::color(Theme::COLOR_PANEL_BORDER), LV_PART_MAIN);
     lv_obj_set_style_border_width(detailBackButton, 1, LV_PART_MAIN);
+    lv_obj_set_style_radius(detailBackButton, 8, LV_PART_MAIN);
     lv_obj_add_event_cb(detailBackButton, detailBackButtonEventHandler, LV_EVENT_CLICKED, this);
     lv_obj_center(Theme::createLabel(detailBackButton, LV_SYMBOL_LEFT " SATELLITES", Theme::COLOR_PRIMARY));
     detailTitleLabel = Theme::createLabel(detailScreen, "SATELLITE INFORMATION", Theme::COLOR_PRIMARY);
     lv_obj_align(detailTitleLabel, LV_ALIGN_TOP_LEFT, 164, Theme::CONTENT_TOP + 10);
 
-    lv_obj_t* identityPanel = Theme::createPanel(detailScreen, 8, 110, 252, 328, "IDENTITY / RADIO  |  SATNOGS");
-    lv_obj_add_flag(identityPanel, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_scroll_dir(identityPanel, LV_DIR_VER);
-    lv_obj_set_scrollbar_mode(identityPanel, LV_SCROLLBAR_MODE_AUTO);
-    detailIdentityLabel = Theme::createLabel(identityPanel, "", Theme::COLOR_TEXT, &lv_font_montserrat_14);
-    lv_obj_set_pos(detailIdentityLabel, 0, 38);
-    lv_obj_set_width(detailIdentityLabel, 222);
-    lv_obj_t* positionPanel = Theme::createPanel(detailScreen, 268, 110, 252, 328, "LIVE POSITION");
-    detailPositionLabel = Theme::createLabel(positionPanel, "", Theme::COLOR_TEXT_MUTED, &lv_font_montserrat_14);
-    lv_obj_set_pos(detailPositionLabel, 0, 38);
-    lv_obj_set_width(detailPositionLabel, 222);
-    lv_obj_t* passPanel = Theme::createPanel(detailScreen, 528, 110, 264, 328, "NEXT PASS");
-    lv_obj_add_flag(passPanel, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_scroll_dir(passPanel, LV_DIR_VER);
-    lv_obj_set_scrollbar_mode(passPanel, LV_SCROLLBAR_MODE_AUTO);
-    detailPassLabel = Theme::createLabel(passPanel, "", Theme::COLOR_TEXT_MUTED, &lv_font_montserrat_14);
-    lv_obj_set_pos(detailPassLabel, 0, 38);
-    lv_obj_set_width(detailPassLabel, 234);
+    lv_obj_t* overviewPanel = Theme::createPanel(
+        detailScreen, 8, 110, 300, 328, "POSITION & NEXT PASS");
+    detailIdentityLabel = Theme::createLabel(
+        overviewPanel, "--", Theme::COLOR_TEXT, &lv_font_montserrat_20);
+    lv_obj_set_pos(detailIdentityLabel, 0, 36);
+    lv_obj_set_width(detailIdentityLabel, 272);
+    lv_obj_set_style_text_align(
+        detailIdentityLabel, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    Theme::createDivider(overviewPanel, 0, 76, 272);
+    detailPositionLabel = Theme::createLabel(
+        overviewPanel, "", Theme::COLOR_TEXT_MUTED, &lv_font_montserrat_14);
+    lv_obj_set_pos(detailPositionLabel, 0, 94);
+    lv_obj_set_width(detailPositionLabel, 272);
+    lv_obj_set_style_text_align(
+        detailPositionLabel, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    Theme::createDivider(overviewPanel, 0, 190, 272);
+    detailPassLabel = Theme::createLabel(
+        overviewPanel, "", Theme::COLOR_TEXT, &lv_font_montserrat_14);
+    lv_obj_set_pos(detailPassLabel, 0, 208);
+    lv_obj_set_width(detailPassLabel, 272);
+    lv_obj_set_style_text_align(
+        detailPassLabel, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+
+    lv_obj_t* radioPanel = Theme::createPanel(
+        detailScreen, 316, 110, 476, 328, "RADIO INFORMATION  |  SATNOGS");
+    lv_obj_t* radioScroller = lv_obj_create(radioPanel);
+    lv_obj_set_pos(radioScroller, 0, 30);
+    lv_obj_set_size(radioScroller, 452, 276);
+    lv_obj_set_style_bg_opa(radioScroller, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(radioScroller, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(radioScroller, 0, LV_PART_MAIN);
+    lv_obj_set_scroll_dir(radioScroller, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(radioScroller, LV_SCROLLBAR_MODE_AUTO);
+    detailRadioLabel = Theme::createLabel(
+        radioScroller, "Loading radio information...", Theme::COLOR_TEXT_MUTED,
+        &lv_font_montserrat_14);
+    lv_obj_set_pos(detailRadioLabel, 0, 0);
+    lv_obj_set_width(detailRadioLabel, 432);
+    lv_label_set_long_mode(detailRadioLabel, LV_LABEL_LONG_WRAP);
     update();
     updateTimer = lv_timer_create(updateTimerCallback, 1000, this);
 }
 
 void SatelliteScreen::show() { if (screen != nullptr) { lv_scr_load(screen); update(); } }
+
+void SatelliteScreen::release()
+{
+    if (updateTimer != nullptr) { lv_timer_del(updateTimer); updateTimer = nullptr; }
+    if (detailScreen != nullptr) { lv_obj_del(detailScreen); detailScreen = nullptr; }
+    if (screen != nullptr) { lv_obj_del(screen); screen = nullptr; }
+    statusLabel = passScroller = nullptr;
+    detailTitleLabel = detailIdentityLabel = detailPositionLabel = detailPassLabel = nullptr;
+    detailRadioLabel = nullptr;
+    selectedCatalogNumber = 0;
+    for (uint8_t i = 0; i < SatelliteService::SATELLITE_COUNT; ++i)
+    {
+        passRowButtons[i] = passRowLabels[i] = nullptr;
+        passRowSeparators[i] = nullptr;
+        targets[i] = targetLabels[i] = nullptr;
+    }
+}
 void SatelliteScreen::setNavigationCallback(NavigationCallback callback) { navigationCallback = callback; }
 
 void SatelliteScreen::update()
@@ -227,6 +295,8 @@ void SatelliteScreen::update()
             compassDirection(item.losAzimuth) + "   " LV_SYMBOL_RIGHT;
         lv_label_set_text(passRowLabels[row], text.c_str());
         lv_obj_clear_flag(passRowButtons[row], LV_OBJ_FLAG_HIDDEN);
+        if (row + 1 < SatelliteService::SATELLITE_COUNT)
+            lv_obj_clear_flag(passRowSeparators[row], LV_OBJ_FLAG_HIDDEN);
     }
     lv_obj_update_layout(passScroller);
 
@@ -273,54 +343,43 @@ void SatelliteScreen::updateDetail()
     if (selected == nullptr) return;
 
     lv_label_set_text(detailTitleLabel, selected->name.c_str());
-    String identity = "NAME\n" + selected->name +
-        "\n\nNORAD CATALOG\n" + String(selected->catalogNumber) +
-        "\n\nORBIT DATA\n" + (selected->valid ? String("CURRENT") : String("UNAVAILABLE")) +
-        "\n\nTRACKING\n" + (selected->visible ? String("ABOVE HORIZON") : String("BELOW HORIZON"));
+    lv_label_set_text(
+        detailIdentityLabel,
+        selected->visible ? "ABOVE HORIZON" : "BELOW HORIZON");
 
-    identity += "\n\nRADIO FREQUENCIES\n";
+    String radio;
     if (!selected->radioReady)
-        identity += "Loading from SatNOGS...";
+        radio = "Loading from SatNOGS...";
     else if (!selected->radioError.isEmpty())
-        identity += selected->radioError;
+        radio = selected->radioError;
     else if (selected->radioChannelCount == 0)
-        identity += "No active transmitters listed";
+        radio = "No active transmitters listed";
     else
     {
         for (uint8_t index = 0; index < selected->radioChannelCount; ++index)
         {
             const SatelliteRadioChannel& channel = selected->radioChannels[index];
-            if (index > 0) identity += "\n\n";
-            identity += channel.description + "\n";
+            if (index > 0) radio += "\n\n";
+            radio += channel.description + "\n";
             if (channel.downlinkHz > 0)
-                identity += "DOWN  " + frequencyText(channel.downlinkHz) + "\n";
+                radio += "DOWNLINK  " + frequencyText(channel.downlinkHz) + "\n";
             if (channel.uplinkHz > 0)
-                identity += "UP       " + frequencyText(channel.uplinkHz) + "\n";
-            identity += "MODE  " + channel.mode;
-            if (channel.baud > 0) identity += "  " + String(channel.baud) + " baud";
-            if (!channel.service.isEmpty()) identity += "\n" + channel.service;
+                radio += "UPLINK       " + frequencyText(channel.uplinkHz) + "\n";
+            if (!channel.mode.isEmpty()) radio += "MODE          " + channel.mode;
+            if (channel.baud > 0) radio += "  " + String(channel.baud) + " baud";
+            if (!channel.service.isEmpty()) radio += "\nSERVICE     " + channel.service;
         }
     }
-    identity += "\n\nSOURCE\nSatNOGS DB";
-    lv_label_set_text(detailIdentityLabel, identity.c_str());
+    lv_label_set_text(detailRadioLabel, radio.c_str());
 
-    String position = "STATUS\n" + (selected->visible ? String("VISIBLE / IN VIEW") : String("NOT IN VIEW")) +
-        "\n\nAZIMUTH\n" + String(selected->currentAzimuth, 1) + " deg  " +
+    String position = "AZIMUTH  " + String(selected->currentAzimuth, 1) + " deg  " +
         compassDirection(selected->currentAzimuth) +
-        "\n\nELEVATION\n" + String(selected->currentElevation, 1) + " deg" +
-        "\n\nSLANT RANGE\n" + String(selected->rangeKm, 0) + " km";
+        "\n\nELEVATION  " + String(selected->currentElevation, 1) + " deg" +
+        "\n\nRANGE  " + String(selected->rangeKm, 0) + " km";
     lv_label_set_text(detailPositionLabel, position.c_str());
 
-    String pass = "AOS - LOCAL\n" + localDateTime(selected->aosTime) +
-        "\n\nAOS - UTC\n" + utcDateTime(selected->aosTime) +
-        "\n\nPEAK - LOCAL\n" + localDateTime(selected->maxTime) +
-        "\n\nLOS - LOCAL\n" + localDateTime(selected->losTime) +
-        "\n\nDURATION\n" + durationText(selected->aosTime, selected->losTime) +
-        "\n\nMAX ELEVATION\n" + String(selected->maxElevation, 1) + " deg" +
-        "\n\nRISE DIRECTION\n" + String(selected->aosAzimuth, 1) + " deg  " +
-        compassDirection(selected->aosAzimuth) +
-        "\n\nSET DIRECTION\n" + String(selected->losAzimuth, 1) + " deg  " +
-        compassDirection(selected->losAzimuth);
+    String pass = "NEXT PASS UTC\n" + utcDateTime(selected->aosTime) +
+        "\n\nDURATION\n" + durationText(selected->aosTime, selected->losTime);
     lv_label_set_text(detailPassLabel, pass.c_str());
 }
 

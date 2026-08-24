@@ -45,6 +45,7 @@ private:
         lv_timer_t* timer);
 
     void update();
+    uint32_t calculatePanelSignature() const;
 
     lv_obj_t* screen = nullptr;
 
@@ -67,4 +68,8 @@ private:
     WeatherService* weatherService = nullptr;
     AircraftService* aircraftService = nullptr;
     SatelliteService* satelliteService = nullptr;
+    SolarService* solarService = nullptr;
+    LiveSpotsService* liveSpotsService = nullptr;
+    PotaService* potaService = nullptr;
+    uint32_t renderedPanelSignature = UINT32_MAX;
 };

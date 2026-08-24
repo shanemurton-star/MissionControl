@@ -4,10 +4,12 @@
 #include "Theme.h"
 
 const AppSettings* HeaderBar::appSettings = nullptr;
+HeaderBar::ScreenOffCallback HeaderBar::screenOffCallback = nullptr;
 
 namespace
 {
     constexpr Page MENU_PAGES[] = {
+        Page::Dashboard,
         Page::Weather,
         Page::Aircraft,
         Page::LiveSpots,
@@ -18,6 +20,7 @@ namespace
     };
 
     constexpr const char* MENU_LABELS[] = {
+        "DASHBOARD",
         "WEATHER",
         "AIRCRAFT",
         "LIVE SPOTS",
@@ -40,11 +43,46 @@ namespace
         lv_obj_clear_flag(line, LV_OBJ_FLAG_SCROLLABLE);
         return line;
     }
+
+    void configureMenuRow(lv_obj_t* row)
+    {
+        lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, LV_PART_MAIN);
+        lv_obj_set_style_bg_color(
+            row, Theme::color(Theme::COLOR_PRIMARY),
+            LV_PART_MAIN | LV_STATE_PRESSED);
+        lv_obj_set_style_bg_opa(
+            row, LV_OPA_20, LV_PART_MAIN | LV_STATE_PRESSED);
+        lv_obj_set_style_border_width(row, 0, LV_PART_MAIN);
+        lv_obj_set_style_outline_width(row, 0, LV_PART_MAIN);
+        lv_obj_set_style_shadow_width(row, 0, LV_PART_MAIN);
+        lv_obj_set_style_radius(row, 0, LV_PART_MAIN);
+        lv_obj_set_style_pad_all(row, 6, LV_PART_MAIN);
+    }
+
+    void createMenuSeparator(
+        lv_obj_t* parent, int16_t y, lv_opa_t opacity = LV_OPA_50)
+    {
+        lv_obj_t* separator = lv_obj_create(parent);
+        lv_obj_set_pos(separator, 0, y);
+        lv_obj_set_size(separator, 248, 1);
+        lv_obj_set_style_bg_color(
+            separator, Theme::color(Theme::COLOR_PANEL_BORDER), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(separator, opacity, LV_PART_MAIN);
+        lv_obj_set_style_border_width(separator, 0, LV_PART_MAIN);
+        lv_obj_set_style_pad_all(separator, 0, LV_PART_MAIN);
+        lv_obj_clear_flag(separator, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_clear_flag(separator, LV_OBJ_FLAG_CLICKABLE);
+    }
 }
 
 void HeaderBar::configureSettings(const AppSettings& settings)
 {
     appSettings = &settings;
+}
+
+void HeaderBar::configureScreenOffCallback(ScreenOffCallback callback)
+{
+    screenOffCallback = callback;
 }
 
 void HeaderBar::create(lv_obj_t* parent, ClockService& clockServiceReference,
@@ -124,26 +162,44 @@ void HeaderBar::createMenu(lv_obj_t* parent)
     lv_obj_set_pos(menuPanel, 8, 8);
     lv_obj_set_size(menuPanel, 276, 366);
     Theme::configurePanel(menuPanel);
-    lv_obj_t* title = Theme::createLabel(menuPanel, "MISSION CONTROL MENU", Theme::COLOR_PRIMARY);
+    lv_obj_t* title = Theme::createLabel(menuPanel, "MISSION CONTROL", Theme::COLOR_PRIMARY);
     lv_obj_set_pos(title, 4, 0);
+    createMenuSeparator(menuPanel, 24, LV_OPA_70);
 
     for (uint8_t index = 0; index < MENU_ITEM_COUNT; ++index)
     {
         lv_obj_t* button = lv_btn_create(menuPanel);
         menuButtons[index] = button;
-        lv_obj_set_pos(button, 0, 28 + index * 44);
-        lv_obj_set_size(button, 248, 39);
-        lv_obj_set_style_bg_color(button, Theme::color(Theme::COLOR_PANEL), LV_PART_MAIN);
-        lv_obj_set_style_border_color(button, Theme::color(Theme::COLOR_PANEL_BORDER), LV_PART_MAIN);
-        lv_obj_set_style_border_width(button, 1, LV_PART_MAIN);
-        lv_obj_set_style_radius(button, 4, LV_PART_MAIN);
-        lv_obj_set_style_pad_all(button, 6, LV_PART_MAIN);
+        const int16_t rowY = index < MENU_ITEM_COUNT - 1
+            ? 27 + index * 34
+            : 273;
+        lv_obj_set_pos(button, 0, rowY);
+        lv_obj_set_size(button, 248, 34);
+        configureMenuRow(button);
         lv_obj_add_event_cb(button, menuItemEventHandler, LV_EVENT_CLICKED, this);
         lv_obj_t* label = Theme::createLabel(button, MENU_LABELS[index], Theme::COLOR_TEXT);
-        lv_obj_align(label, LV_ALIGN_LEFT_MID, 4, 0);
-        lv_obj_t* arrow = Theme::createLabel(button, LV_SYMBOL_RIGHT, Theme::COLOR_TEXT_DIM);
-        lv_obj_align(arrow, LV_ALIGN_RIGHT_MID, -4, 0);
+        lv_obj_align(label, LV_ALIGN_LEFT_MID, 6, 0);
+
+        if (index < MENU_ITEM_COUNT - 2)
+            createMenuSeparator(menuPanel, rowY + 33);
     }
+
+    // Separate destination pages from system actions without introducing
+    // another boxed control style.
+    createMenuSeparator(menuPanel, 268, LV_OPA_70);
+    createMenuSeparator(menuPanel, 307);
+
+    screenOffButton = lv_btn_create(menuPanel);
+    lv_obj_set_pos(screenOffButton, 0, 308);
+    lv_obj_set_size(screenOffButton, 248, 34);
+    configureMenuRow(screenOffButton);
+    lv_obj_add_event_cb(
+        screenOffButton, screenOffEventHandler, LV_EVENT_CLICKED, this);
+    lv_obj_t* screenOffLabel = Theme::createLabel(
+        screenOffButton,
+        LV_SYMBOL_POWER "  TURN OFF SCREEN",
+        Theme::COLOR_WARNING);
+    lv_obj_align(screenOffLabel, LV_ALIGN_LEFT_MID, 6, 0);
 
     lv_obj_add_flag(menuOverlay, LV_OBJ_FLAG_HIDDEN);
 }
@@ -156,6 +212,12 @@ void HeaderBar::setSettingsCallback(SettingsCallback callback)
 void HeaderBar::setNavigationCallback(NavigationCallback callback)
 {
     navigationCallback = callback;
+}
+
+void HeaderBar::useLocationIdentity(bool enabled)
+{
+    locationIdentity = enabled;
+    update();
 }
 
 void HeaderBar::settingsEventHandler(lv_event_t* event)
@@ -191,6 +253,14 @@ void HeaderBar::menuItemEventHandler(lv_event_t* event)
     }
 }
 
+void HeaderBar::screenOffEventHandler(lv_event_t* event)
+{
+    HeaderBar* self = static_cast<HeaderBar*>(lv_event_get_user_data(event));
+    if (self == nullptr) return;
+    self->hideMenu();
+    if (screenOffCallback != nullptr) screenOffCallback();
+}
+
 void HeaderBar::menuOverlayEventHandler(lv_event_t* event)
 {
     HeaderBar* self = static_cast<HeaderBar*>(lv_event_get_user_data(event));
@@ -215,7 +285,10 @@ void HeaderBar::update()
 
     if (appSettings != nullptr)
     {
-        String identity = appSettings->callsign + " - " + appSettings->gridSquare;
+        String identity = locationIdentity
+            ? appSettings->locationName
+            : appSettings->callsign + " - " + appSettings->gridSquare;
+        if (identity.isEmpty()) identity = "WEATHER";
         lv_label_set_text(identityLabel, identity.c_str());
     }
 

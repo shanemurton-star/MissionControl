@@ -1,4 +1,20 @@
 #include "ScreenManager.h"
+#include <esp_heap_caps.h>
+
+namespace
+{
+    void logScreenMemory(const char* screenName)
+    {
+        Serial.print("[Memory] after ");
+        Serial.print(screenName);
+        Serial.print(" internal free=");
+        Serial.print(heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+        Serial.print(" largest=");
+        Serial.print(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+        Serial.print(" PSRAM free=");
+        Serial.println(heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    }
+}
 
 void ScreenManager::begin(
     ClockService& clockService,
@@ -11,9 +27,20 @@ void ScreenManager::begin(
     SettingsService& settingsService,
     WiFiService& wifiService)
 {
+    this->clockService = &clockService;
+    this->weatherService = &weatherService;
+    this->aircraftService = &aircraftService;
+    this->satelliteService = &satelliteService;
+    this->solarService = &solarService;
+    this->liveSpotsService = &liveSpotsService;
+    this->settingsService = &settingsService;
+    this->wifiService = &wifiService;
+    this->potaService = &potaService;
+
     HeaderBar::configureSettings(settingsService.get());
     Serial.println("[UI] Startup screen...");
     startupScreen.begin();
+    logScreenMemory("startup screen");
     Serial.println("[UI] Dashboard screen...");
 
     dashboardScreen.begin(
@@ -24,25 +51,8 @@ void ScreenManager::begin(
         solarService,
         liveSpotsService,
         potaService);
-    Serial.println("[UI] Weather screen...");
-
-    weatherScreen.begin(
-        clockService,
-        weatherService);
-
-    Serial.println("[UI] Aircraft screen...");
-    aircraftScreen.begin(clockService, aircraftService);
-    Serial.println("[UI] Satellite screen...");
-    satelliteScreen.begin(clockService, satelliteService);
-    Serial.println("[UI] Solar screen...");
-    solarScreen.begin(clockService, solarService);
-    Serial.println("[UI] Live Spots screen...");
-    liveSpotsScreen.begin(clockService, liveSpotsService);
-    Serial.println("[UI] Settings screen...");
-    settingsScreen.begin(clockService, settingsService, wifiService, liveSpotsService);
-    Serial.println("[UI] POTA screen...");
-    potaScreen.begin(clockService, potaService);
-    Serial.println("[UI] All screens created.");
+    logScreenMemory("dashboard screen");
+    Serial.println("[UI] Detail screens will be created on demand.");
 
     /*
      * Central navigation callbacks
@@ -52,26 +62,6 @@ void ScreenManager::begin(
         {
             handleNavigation(page);
         });
-
-    weatherScreen.setNavigationCallback(
-        [this](Page page)
-        {
-            handleNavigation(page);
-        });
-
-    aircraftScreen.setNavigationCallback(
-        [this](Page page) { handleNavigation(page); });
-
-    satelliteScreen.setNavigationCallback(
-        [this](Page page) { handleNavigation(page); });
-    solarScreen.setNavigationCallback(
-        [this](Page page) { handleNavigation(page); });
-    liveSpotsScreen.setNavigationCallback(
-        [this](Page page) { handleNavigation(page); });
-    settingsScreen.setNavigationCallback(
-        [this](Page page) { handleNavigation(page); });
-    potaScreen.setNavigationCallback(
-        [this](Page page) { handleNavigation(page); });
 
     showStartupScreen();
 
@@ -97,32 +87,46 @@ void ScreenManager::showDashboardScreen()
 
 void ScreenManager::showWeatherScreen()
 {
+    weatherScreen.begin(*clockService, *weatherService);
+    weatherScreen.setNavigationCallback([this](Page page) { handleNavigation(page); });
     weatherScreen.show();
 }
 
 void ScreenManager::showAircraftScreen()
 {
+    aircraftScreen.begin(*clockService, *aircraftService);
+    aircraftScreen.setNavigationCallback([this](Page page) { handleNavigation(page); });
     aircraftScreen.show();
 }
 
 void ScreenManager::showSatelliteScreen()
 {
+    satelliteScreen.begin(*clockService, *satelliteService);
+    satelliteScreen.setNavigationCallback([this](Page page) { handleNavigation(page); });
     satelliteScreen.show();
 }
 void ScreenManager::showSolarScreen()
 {
+    solarScreen.begin(*clockService, *solarService);
+    solarScreen.setNavigationCallback([this](Page page) { handleNavigation(page); });
     solarScreen.show();
 }
 void ScreenManager::showLiveSpotsScreen()
 {
+    liveSpotsScreen.begin(*clockService, *liveSpotsService);
+    liveSpotsScreen.setNavigationCallback([this](Page page) { handleNavigation(page); });
     liveSpotsScreen.show();
 }
 void ScreenManager::showSettingsScreen()
 {
+    settingsScreen.begin(*clockService, *settingsService, *wifiService, *liveSpotsService);
+    settingsScreen.setNavigationCallback([this](Page page) { handleNavigation(page); });
     settingsScreen.show();
 }
 void ScreenManager::showPotaScreen()
 {
+    potaScreen.begin(*clockService, *potaService);
+    potaScreen.setNavigationCallback([this](Page page) { handleNavigation(page); });
     potaScreen.show();
 }
 
@@ -134,6 +138,7 @@ WeatherScreen& ScreenManager::getWeatherScreen()
 void ScreenManager::handleNavigation(
     Page page)
 {
+    const Page previousPage = currentPage;
     switch (page)
     {
         case Page::Dashboard:
@@ -171,6 +176,24 @@ void ScreenManager::handleNavigation(
         case Page::System:
             break;
     }
+
+    currentPage = page;
+    if (previousPage != page) releaseDetailScreen(previousPage);
+}
+
+void ScreenManager::releaseDetailScreen(Page page)
+{
+    switch (page)
+    {
+        case Page::Weather: weatherScreen.release(); break;
+        case Page::Aircraft: aircraftScreen.release(); break;
+        case Page::Satellite: satelliteScreen.release(); break;
+        case Page::Solar: solarScreen.release(); break;
+        case Page::LiveSpots: liveSpotsScreen.release(); break;
+        case Page::Settings: settingsScreen.release(); break;
+        case Page::Pota: potaScreen.release(); break;
+        default: break;
+    }
 }
 
 void ScreenManager::startupTimerCallback(
@@ -185,6 +208,19 @@ void ScreenManager::startupTimerCallback(
         return;
     }
 
-    manager->showDashboardScreen();
+    static const Page DEFAULT_SCREEN_PAGES[7] = {
+        Page::Dashboard,
+        Page::Weather,
+        Page::Aircraft,
+        Page::Satellite,
+        Page::Solar,
+        Page::LiveSpots,
+        Page::Pota
+    };
+    uint8_t selection = manager->settingsService != nullptr
+        ? manager->settingsService->get().defaultScreen
+        : 0;
+    if (selection > 6) selection = 0;
+    manager->handleNavigation(DEFAULT_SCREEN_PAGES[selection]);
     manager->startupTimer = nullptr;
 }

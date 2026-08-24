@@ -52,6 +52,7 @@ public:
 private:
     void handleNavigation(
         Page page);
+    void releaseDetailScreen(Page page);
 
     static void startupTimerCallback(
         lv_timer_t* timer);
@@ -67,4 +68,15 @@ private:
     PotaScreen potaScreen;
 
     lv_timer_t* startupTimer = nullptr;
+    Page currentPage = Page::Dashboard;
+
+    ClockService* clockService = nullptr;
+    WeatherService* weatherService = nullptr;
+    AircraftService* aircraftService = nullptr;
+    SatelliteService* satelliteService = nullptr;
+    SolarService* solarService = nullptr;
+    LiveSpotsService* liveSpotsService = nullptr;
+    SettingsService* settingsService = nullptr;
+    WiFiService* wifiService = nullptr;
+    PotaService* potaService = nullptr;
 };

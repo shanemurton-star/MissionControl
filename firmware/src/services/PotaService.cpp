@@ -78,6 +78,7 @@ void PotaService::fetchSpots()
     }
 
     spotCount = 0;
+    nearestParkCount = 0;
     for (JsonObject source : document.as<JsonArray>())
     {
         String comments = source["comments"] | "";
@@ -98,6 +99,7 @@ void PotaService::fetchSpots()
         spot.name = String(source["name"] | "");
         spot.location = String(source["locationDesc"] | "");
         spot.distanceMiles = distanceMiles(latitude, longitude);
+        insertNearestPark(spot);
         if (spot.distanceMiles > ACTIVE_RADIUS_MILES) continue;
         insertSpot(spot);
     }
@@ -105,6 +107,25 @@ void PotaService::fetchSpots()
     valid = true;
     updating = false;
     nextUpdateMs = millis() + REFRESH_MS;
+}
+
+void PotaService::insertNearestPark(const PotaSpotData& spot)
+{
+    for (uint8_t index = 0; index < nearestParkCount; ++index)
+        if (nearestParks[index].reference == spot.reference) return;
+
+    uint8_t position = 0;
+    while (position < nearestParkCount &&
+           nearestParks[position].distanceMiles <= spot.distanceMiles)
+        ++position;
+    if (position >= MAX_NEAREST_PARKS) return;
+
+    const uint8_t last = nearestParkCount < MAX_NEAREST_PARKS
+        ? nearestParkCount : MAX_NEAREST_PARKS - 1;
+    for (uint8_t index = last; index > position; --index)
+        nearestParks[index] = nearestParks[index - 1];
+    nearestParks[position] = spot;
+    if (nearestParkCount < MAX_NEAREST_PARKS) ++nearestParkCount;
 }
 
 void PotaService::insertSpot(const PotaSpotData& spot)
@@ -138,6 +159,11 @@ bool PotaService::isValid() const { return valid; }
 bool PotaService::isUpdating() const { return updating; }
 uint8_t PotaService::getSpotCount() const { return spotCount; }
 const PotaSpotData& PotaService::getSpot(uint8_t index) const { return spots[index]; }
+uint8_t PotaService::getNearestParkCount() const { return nearestParkCount; }
+const PotaSpotData& PotaService::getNearestPark(uint8_t index) const
+{
+    return nearestParks[index];
+}
 const String& PotaService::getLastError() const { return lastError; }
 bool PotaService::timeReached(uint32_t target)
 {

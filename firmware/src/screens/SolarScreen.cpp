@@ -74,10 +74,11 @@ void SolarScreen::begin(ClockService& clockService, SolarService& service)
     });
     lv_obj_t* backButton = lv_btn_create(screen);
     lv_obj_set_pos(backButton, 8, Theme::CONTENT_TOP);
-    lv_obj_set_size(backButton, 116, 36);
+    lv_obj_set_size(backButton, 116, 30);
     lv_obj_set_style_bg_color(backButton, Theme::color(Theme::COLOR_PANEL), LV_PART_MAIN);
     lv_obj_set_style_border_color(backButton, Theme::color(Theme::COLOR_PANEL_BORDER), LV_PART_MAIN);
     lv_obj_set_style_border_width(backButton, 1, LV_PART_MAIN);
+    lv_obj_set_style_radius(backButton, 8, LV_PART_MAIN);
     lv_obj_add_event_cb(backButton, backButtonEventHandler, LV_EVENT_CLICKED, this);
     lv_obj_center(Theme::createLabel(backButton, LV_SYMBOL_LEFT " DASHBOARD", Theme::COLOR_PRIMARY));
     lv_obj_t* title = Theme::createLabel(screen, "SOLAR CONDITIONS DETAIL", Theme::COLOR_PRIMARY);
@@ -108,14 +109,37 @@ void SolarScreen::begin(ClockService& clockService, SolarService& service)
     metricsLabel = Theme::createLabel(metrics, "WAITING FOR DATA", Theme::COLOR_TEXT_MUTED);
     lv_obj_align(metricsLabel, LV_ALIGN_TOP_LEFT, 0, 36);
 
-    lv_obj_t* scales = Theme::createPanel(screen, 528, 110, 264, 328, "NOAA SPACE WEATHER SCALES");
+    lv_obj_t* scales = Theme::createPanel(
+        screen, 528, 110, 264, 328, "NOAA SCALES & CORONA");
     scalesLabel = Theme::createLabel(scales, "R--  S--  G--", Theme::COLOR_TEXT_MUTED);
     lv_obj_align(scalesLabel, LV_ALIGN_TOP_LEFT, 0, 36);
+    coronaImage = lv_img_create(scales);
+    lv_obj_set_pos(coronaImage, 58, 174);
+    lv_obj_add_flag(coronaImage, LV_OBJ_FLAG_HIDDEN);
+    coronaStatusLabel = Theme::createLabel(
+        scales, "CORONA IMAGE UPDATING", Theme::COLOR_TEXT_DIM);
+    lv_obj_set_width(coronaStatusLabel, 244);
+    lv_obj_set_style_text_align(
+        coronaStatusLabel, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_set_pos(coronaStatusLabel, 0, 230);
     update();
     updateTimer = lv_timer_create(updateTimerCallback, 1000, this);
 }
 
 void SolarScreen::show() { if (screen != nullptr) { lv_scr_load(screen); update(); } }
+
+void SolarScreen::release()
+{
+    if (updateTimer != nullptr) { lv_timer_del(updateTimer); updateTimer = nullptr; }
+    if (coronaDescriptor.data != nullptr)
+        lv_img_cache_invalidate_src(&coronaDescriptor);
+    if (screen != nullptr) { lv_obj_del(screen); screen = nullptr; }
+    conditionLabel = metricsLabel = scalesLabel = explanationLabel = nullptr;
+    coronaImage = coronaStatusLabel = nullptr;
+    coronaDescriptor = {};
+    displayedCoronaGeneration = 0;
+    for (auto& label : bandOutlookLabels) label = nullptr;
+}
 void SolarScreen::setNavigationCallback(NavigationCallback callback) { navigationCallback = callback; }
 
 void SolarScreen::update()
@@ -169,9 +193,53 @@ void SolarScreen::update()
         "S" + String(data.solarRadiationScale) + "  RADIATION STORM\n" +
         (data.solarRadiationScale == 0 ? "None" : "Active") + "\n\n" +
         "G" + String(data.geomagneticStormScale) + "  GEOMAGNETIC\n" +
-        (data.geomagneticStormScale == 0 ? "None" : "Active") +
-        "\n\nUpdated from NOAA SWPC\nevery 5 minutes";
+        (data.geomagneticStormScale == 0 ? "None" : "Active");
     lv_label_set_text(scalesLabel, scales.c_str());
+    updateCoronaImage();
+}
+
+void SolarScreen::updateCoronaImage()
+{
+    if (solarService == nullptr || coronaImage == nullptr ||
+        coronaStatusLabel == nullptr)
+    {
+        return;
+    }
+
+    if (!solarService->hasCoronaImage())
+    {
+        lv_obj_add_flag(coronaImage, LV_OBJ_FLAG_HIDDEN);
+        const String& error = solarService->getCoronaError();
+        lv_label_set_text(
+            coronaStatusLabel,
+            error.isEmpty() ? "CORONA IMAGE UPDATING" : "CORONA IMAGE UNAVAILABLE");
+        lv_obj_clear_flag(coronaStatusLabel, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+
+    const uint32_t generation = solarService->getCoronaGeneration();
+    if (generation != displayedCoronaGeneration)
+    {
+        if (coronaDescriptor.data != nullptr)
+            lv_img_cache_invalidate_src(&coronaDescriptor);
+
+        coronaDescriptor.header.always_zero = 0;
+        coronaDescriptor.header.cf = LV_IMG_CF_TRUE_COLOR;
+        coronaDescriptor.header.w = solarService->getCoronaWidth();
+        coronaDescriptor.header.h = solarService->getCoronaHeight();
+        coronaDescriptor.data = reinterpret_cast<const uint8_t*>(
+            solarService->getCoronaPixels());
+        coronaDescriptor.data_size =
+            static_cast<uint32_t>(coronaDescriptor.header.w) *
+            coronaDescriptor.header.h * sizeof(uint16_t);
+
+        lv_img_set_src(coronaImage, &coronaDescriptor);
+        lv_img_set_zoom(coronaImage, 224);
+        displayedCoronaGeneration = generation;
+    }
+
+    lv_obj_add_flag(coronaStatusLabel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(coronaImage, LV_OBJ_FLAG_HIDDEN);
 }
 
 void SolarScreen::backButtonEventHandler(lv_event_t* event)

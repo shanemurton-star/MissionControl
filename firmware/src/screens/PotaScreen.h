@@ -14,6 +14,7 @@ public:
     using NavigationCallback = std::function<void(Page)>;
     void begin(ClockService& clockService, PotaService& potaService);
     void show();
+    void release();
     void setNavigationCallback(NavigationCallback callback);
 
 private:

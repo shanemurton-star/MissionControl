@@ -4,10 +4,12 @@
 #include <Wire.h>
 #include <lvgl.h>
 #include <LovyanGFX.hpp>
+#include <esp_heap_caps.h>
 #include <lgfx/v1/platforms/esp32s3/Panel_RGB.hpp>
 #include <lgfx/v1/platforms/esp32s3/Bus_RGB.hpp>
 
 #include "../screens/ScreenManager.h"
+#include "../ui/HeaderBar.h"
 
 constexpr uint16_t SCREEN_WIDTH = 800;
 constexpr uint16_t SCREEN_HEIGHT = 480;
@@ -121,15 +123,48 @@ namespace
     constexpr uint8_t BACKLIGHT_CHANNEL = 1;
     constexpr uint16_t BACKLIGHT_FREQUENCY = 300;
     constexpr uint8_t BACKLIGHT_RESOLUTION = 8;
-    constexpr uint8_t BACKLIGHT_BRIGHTNESS = 255;
+    constexpr uint8_t MIN_BACKLIGHT_PERCENT = 10;
 
     lv_disp_draw_buf_t drawBuffer;
     lv_disp_drv_t displayDriver;
     lv_indev_drv_t touchDriver;
+    bool screenBacklightOff = false;
+    bool wakeTouchInProgress = false;
+    uint8_t backlightPercent = 100;
 
-    lv_color_t displayBuffer[
-        SCREEN_WIDTH * SCREEN_HEIGHT / 15
-    ];
+    uint8_t backlightDuty(uint8_t percent)
+    {
+        percent = constrain(percent, MIN_BACKLIGHT_PERCENT, 100);
+        return static_cast<uint8_t>((static_cast<uint16_t>(percent) * 255U + 50U) / 100U);
+    }
+
+    void setBacklightBrightness(uint8_t percent)
+    {
+        backlightPercent = constrain(percent, MIN_BACKLIGHT_PERCENT, 100);
+        if (!screenBacklightOff)
+            ledcWrite(BACKLIGHT_CHANNEL, backlightDuty(backlightPercent));
+    }
+
+    void logDisplayMemory(const char* stage)
+    {
+        Serial.print("[Memory] ");
+        Serial.print(stage);
+        Serial.print(" internal free=");
+        Serial.print(heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+        Serial.print(" largest=");
+        Serial.print(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+        Serial.print(" PSRAM free=");
+        Serial.println(heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    }
+
+    // Sixteen RGB565 lines are sufficient for LVGL's partial renderer. The
+    // former 32-line buffer consumed about 51 KB of scarce internal RAM and
+    // left DNS/LwIP with only ~19 KB after UI startup. Keep this DMA source
+    // internal, but halve it to return roughly 25 KB to networking.
+    constexpr uint32_t DISPLAY_BUFFER_PIXELS =
+        SCREEN_WIDTH * SCREEN_HEIGHT / 30;
+
+    lv_color_t displayBuffer[DISPLAY_BUFFER_PIXELS];
 
     void flushDisplay(
         lv_disp_drv_t* display,
@@ -152,6 +187,10 @@ namespace
             reinterpret_cast<lgfx::rgb565_t*>(
                 &colorBuffer->full));
 
+        // LVGL is configured with one partial draw buffer. Do not release that
+        // buffer until the RGB565 DMA transfer has consumed it; otherwise LVGL
+        // can begin drawing the next region over pixels still being scanned out.
+        lcd.waitDMA();
         lv_disp_flush_ready(display);
     }
 
@@ -168,7 +207,27 @@ namespace
             return;
         }
 
-        if (touch_touched())
+        const bool touched = touch_touched();
+
+        if (screenBacklightOff && touched)
+        {
+            ledcWrite(BACKLIGHT_CHANNEL, backlightDuty(backlightPercent));
+            screenBacklightOff = false;
+            wakeTouchInProgress = true;
+            Serial.println("[Display] Screen awakened by touch");
+            return;
+        }
+
+        // Consume the complete gesture used to wake the panel. LVGL receives a
+        // release only after the finger is lifted, preventing the hidden button
+        // beneath the wake touch from being activated.
+        if (wakeTouchInProgress)
+        {
+            if (!touched) wakeTouchInProgress = false;
+            return;
+        }
+
+        if (touched)
         {
             data->state = LV_INDEV_STATE_PR;
             data->point.x = touch_last_x;
@@ -189,6 +248,7 @@ bool DisplayService::begin(
     WiFiService& wifiService)
 {
     Serial.println("Initializing CrowPanel display...");
+    logDisplayMemory("before display init");
 
     // Enable the CrowPanel hardware.
     pinMode(BOARD_ENABLE_PIN, OUTPUT);
@@ -197,18 +257,20 @@ bool DisplayService::begin(
     // Initialize the RGB display.
     lcd.begin();
     lcd.fillScreen(TFT_BLACK);
+    logDisplayMemory("after RGB driver");
 
     // Initialize LVGL.
     lv_init();
 
     // Initialize the GT911 touch controller.
     touch_init();
+    logDisplayMemory("after LVGL and touch");
 
     lv_disp_draw_buf_init(
         &drawBuffer,
         displayBuffer,
         nullptr,
-        SCREEN_WIDTH * SCREEN_HEIGHT / 15);
+        DISPLAY_BUFFER_PIXELS);
 
     lv_disp_drv_init(&displayDriver);
 
@@ -226,7 +288,7 @@ bool DisplayService::begin(
 
     lv_indev_drv_register(&touchDriver);
 
-    // Turn on the backlight at full brightness.
+    // Apply the saved user brightness as soon as PWM is available.
     ledcSetup(
         BACKLIGHT_CHANNEL,
         BACKLIGHT_FREQUENCY,
@@ -236,9 +298,14 @@ bool DisplayService::begin(
         BACKLIGHT_PIN,
         BACKLIGHT_CHANNEL);
 
-    ledcWrite(
-        BACKLIGHT_CHANNEL,
-        BACKLIGHT_BRIGHTNESS);
+    screenBacklightOff = false;
+    setBacklightBrightness(settingsService.get().displayBrightness);
+
+    SettingsScreen::configureBrightnessCallback(
+        [](uint8_t percent) { setBacklightBrightness(percent); });
+
+    HeaderBar::configureScreenOffCallback(
+        [this]() { turnOffScreen(); });
 
     
     Serial.println("Creating Mission Control UI...");
@@ -254,6 +321,8 @@ bool DisplayService::begin(
         settingsService,
         wifiService);
 
+    logDisplayMemory("after all screens");
+
     Serial.println("Mission Control UI created.");
 
     lastTickMillis = millis();
@@ -264,6 +333,14 @@ bool DisplayService::begin(
     Serial.println("CrowPanel display initialized.");
 
     return true;
+}
+
+void DisplayService::turnOffScreen()
+{
+    ledcWrite(BACKLIGHT_CHANNEL, 0);
+    screenBacklightOff = true;
+    wakeTouchInProgress = false;
+    Serial.println("[Display] Backlight off; services remain active");
 }
 
 void DisplayService::update()

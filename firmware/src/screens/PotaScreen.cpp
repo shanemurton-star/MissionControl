@@ -21,10 +21,11 @@ void PotaScreen::begin(ClockService& clockService, PotaService& service)
 
     lv_obj_t* backButton = lv_btn_create(screen);
     lv_obj_set_pos(backButton, 8, Theme::CONTENT_TOP);
-    lv_obj_set_size(backButton, 116, 36);
+    lv_obj_set_size(backButton, 116, 30);
     lv_obj_set_style_bg_color(backButton, Theme::color(Theme::COLOR_PANEL), LV_PART_MAIN);
     lv_obj_set_style_border_color(backButton, Theme::color(Theme::COLOR_PANEL_BORDER), LV_PART_MAIN);
     lv_obj_set_style_border_width(backButton, 1, LV_PART_MAIN);
+    lv_obj_set_style_radius(backButton, 8, LV_PART_MAIN);
     lv_obj_add_event_cb(backButton, backButtonEventHandler, LV_EVENT_CLICKED, this);
     lv_obj_center(Theme::createLabel(backButton, LV_SYMBOL_LEFT " DASHBOARD", Theme::COLOR_PRIMARY));
 
@@ -37,7 +38,10 @@ void PotaScreen::begin(ClockService& clockService, PotaService& service)
     lv_obj_add_flag(left, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scroll_dir(left, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(left, LV_SCROLLBAR_MODE_AUTO);
-    lv_obj_t* right = Theme::createPanel(screen, 516, 110, 276, 328, "POTA SUMMARY");
+    lv_obj_t* right = Theme::createPanel(screen, 516, 110, 276, 328, "CLOSEST ACTIVE PARKS");
+    lv_obj_add_flag(right, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(right, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(right, LV_SCROLLBAR_MODE_AUTO);
     columnLabels[0] = Theme::createLabel(left, "WAITING FOR POTA", Theme::COLOR_TEXT_MUTED);
     columnLabels[1] = Theme::createLabel(right, "", Theme::COLOR_TEXT_MUTED);
     lv_obj_set_pos(columnLabels[0], 0, 32);
@@ -52,6 +56,14 @@ void PotaScreen::begin(ClockService& clockService, PotaService& service)
 void PotaScreen::show()
 {
     if (screen != nullptr) { lv_scr_load(screen); update(); }
+}
+
+void PotaScreen::release()
+{
+    if (updateTimer != nullptr) { lv_timer_del(updateTimer); updateTimer = nullptr; }
+    if (screen != nullptr) { lv_obj_del(screen); screen = nullptr; }
+    statusLabel = nullptr;
+    for (auto& label : columnLabels) label = nullptr;
 }
 
 void PotaScreen::setNavigationCallback(NavigationCallback callback)
@@ -86,12 +98,20 @@ void PotaScreen::update()
     }
     if (list.isEmpty()) list = "NO ACTIVE PARKS WITHIN 100 MILES";
     lv_label_set_text(columnLabels[0], list.c_str());
-    String summary = "ACTIVE PARKS\n" + String(count) +
-        "\n\nSEARCH RADIUS\n100 miles" +
-        "\n\nSORT ORDER\nNearest first" +
-        "\n\nREFRESH\nEvery 60 seconds" +
-        "\n\nTap and drag the list\nto view more parks.";
-    lv_label_set_text(columnLabels[1], summary.c_str());
+    String nearest;
+    for (uint8_t index = 0;
+         index < potaService->getNearestParkCount();
+         ++index)
+    {
+        const PotaSpotData& park = potaService->getNearestPark(index);
+        String parkName = park.name;
+        if (parkName.length() > 24) parkName = parkName.substring(0, 24);
+        if (!nearest.isEmpty()) nearest += "\n\n";
+        nearest += String(index + 1) + ".  " + park.reference +
+            "   " + String(park.distanceMiles, 0) + " mi\n" + parkName;
+    }
+    if (nearest.isEmpty()) nearest = "NO ACTIVE PARKS AVAILABLE";
+    lv_label_set_text(columnLabels[1], nearest.c_str());
 }
 
 void PotaScreen::backButtonEventHandler(lv_event_t* event)

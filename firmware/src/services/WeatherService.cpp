@@ -103,6 +103,7 @@ void WeatherService::begin(
     lastError = "";
 
     nextActionMs = 0;
+    dataRevision = 0;
     updating = false;
 
     if (WiFi.status() == WL_CONNECTED)
@@ -242,6 +243,11 @@ bool WeatherService::isValid() const
 bool WeatherService::isUpdating() const
 {
     return updating;
+}
+
+uint32_t WeatherService::getDataRevision() const
+{
+    return dataRevision;
 }
 
 const WeatherData&
@@ -1020,6 +1026,7 @@ void WeatherService::fetchAirQuality()
     }
 
     lastError = "";
+    ++dataRevision;
     updating = false;
     state = State::Ready;
     nextActionMs = millis() + refreshIntervalMs;

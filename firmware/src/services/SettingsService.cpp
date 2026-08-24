@@ -128,6 +128,74 @@ bool SettingsService::hasWiFiCredentials() const
         !currentSettings.wifiPassword.isEmpty();
 }
 
+bool SettingsService::stageWiFiSettings(const AppSettings& candidate)
+{
+    if (!initialized || candidate.wifiSsid.isEmpty() ||
+        candidate.wifiPassword.isEmpty()) return false;
+
+    preferences.putString("pendingssid", candidate.wifiSsid);
+    preferences.putString("pendingpass", candidate.wifiPassword);
+    preferences.putString("pendinghost", candidate.hostname);
+    preferences.putBool("wifipending", true);
+    preferences.putBool("wififailed", false);
+    pendingWiFiSettings = true;
+    wifiCandidateFailed = false;
+    Serial.println("[SettingsService] Candidate WiFi settings staged for reboot test");
+    return true;
+}
+
+bool SettingsService::hasPendingWiFiSettings() const
+{
+    return pendingWiFiSettings;
+}
+
+bool SettingsService::commitPendingWiFiSettings()
+{
+    if (!initialized || !pendingWiFiSettings) return false;
+    preferences.putString("ssid", currentSettings.wifiSsid);
+    preferences.putString("wifipass", currentSettings.wifiPassword);
+    preferences.putString("hostname", currentSettings.hostname);
+    preferences.remove("pendingssid");
+    preferences.remove("pendingpass");
+    preferences.remove("pendinghost");
+    preferences.putBool("wifipending", false);
+    preferences.putBool("wififailed", false);
+    pendingWiFiSettings = false;
+    wifiCandidateFailed = false;
+    Serial.println("[SettingsService] Candidate WiFi settings verified and committed");
+    return true;
+}
+
+bool SettingsService::discardPendingWiFiSettings()
+{
+    if (!initialized || !pendingWiFiSettings) return false;
+    preferences.remove("pendingssid");
+    preferences.remove("pendingpass");
+    preferences.remove("pendinghost");
+    preferences.putBool("wifipending", false);
+    preferences.putBool("wififailed", true);
+    pendingWiFiSettings = false;
+    wifiCandidateFailed = true;
+    currentSettings.wifiSsid = preferences.getString("ssid", "");
+    currentSettings.wifiPassword = preferences.getString("wifipass", "");
+    currentSettings.hostname = preferences.getString("hostname", "mission-control");
+    Serial.println("[SettingsService] Candidate rejected; restored verified WiFi settings");
+    return true;
+}
+
+bool SettingsService::didWiFiCandidateFail() const
+{
+    return wifiCandidateFailed;
+}
+
+void SettingsService::clearWiFiCandidateFailure()
+{
+    if (!initialized || !wifiCandidateFailed) return;
+    preferences.putBool("wififailed", false);
+    wifiCandidateFailed = false;
+    Serial.println("[SettingsService] Verified fallback connected; WiFi failure notice cleared");
+}
+
 void SettingsService::loadDefaults()
 {
     // --------------------------------------------------------
@@ -194,6 +262,8 @@ void SettingsService::loadDefaults()
 
     currentSettings.displayBrightness =
         DISPLAY_BRIGHTNESS;
+
+    currentSettings.defaultScreen = 0;
 
 
     // --------------------------------------------------------
@@ -300,6 +370,16 @@ void SettingsService::loadFromStorage()
             "hostname",
             currentSettings.hostname);
 
+    pendingWiFiSettings = preferences.getBool("wifipending", false);
+    wifiCandidateFailed = preferences.getBool("wififailed", false);
+    if (pendingWiFiSettings)
+    {
+        currentSettings.wifiSsid = preferences.getString("pendingssid", currentSettings.wifiSsid);
+        currentSettings.wifiPassword = preferences.getString("pendingpass", currentSettings.wifiPassword);
+        currentSettings.hostname = preferences.getString("pendinghost", currentSettings.hostname);
+        Serial.println("[SettingsService] Pending WiFi candidate loaded for boot test");
+    }
+
 
     // --------------------------------------------------------
     // Display
@@ -309,6 +389,15 @@ void SettingsService::loadFromStorage()
         preferences.getUChar(
             "brightness",
             currentSettings.displayBrightness);
+
+    currentSettings.defaultScreen =
+        preferences.getUChar(
+            "defaultpage",
+            currentSettings.defaultScreen);
+    if (currentSettings.defaultScreen > 6)
+    {
+        currentSettings.defaultScreen = 0;
+    }
 
 
     // --------------------------------------------------------
@@ -408,6 +497,10 @@ void SettingsService::saveToStorage()
     preferences.putUChar(
         "brightness",
         currentSettings.displayBrightness);
+
+    preferences.putUChar(
+        "defaultpage",
+        currentSettings.defaultScreen);
 
 
     // --------------------------------------------------------

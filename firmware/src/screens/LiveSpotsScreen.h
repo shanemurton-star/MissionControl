@@ -12,6 +12,7 @@ public:
     using NavigationCallback = std::function<void(Page)>;
     void begin(ClockService& clockService, LiveSpotsService& spotsService);
     void show();
+    void release();
     void setNavigationCallback(NavigationCallback callback);
 private:
     static void backButtonEventHandler(lv_event_t* event);

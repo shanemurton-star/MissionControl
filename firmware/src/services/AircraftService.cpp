@@ -199,6 +199,8 @@ uint8_t AircraftService::getAircraftCount() const { return aircraftCount; }
 const AircraftData& AircraftService::getAircraft(uint8_t index) const { return aircraft[index]; }
 uint32_t AircraftService::getLastUpdateTime() const { return lastUpdateTime; }
 const String& AircraftService::getLastError() const { return lastError; }
+double AircraftService::getCenterLatitude() const { return latitude; }
+double AircraftService::getCenterLongitude() const { return longitude; }
 
 bool AircraftService::timeReached(unsigned long targetTime)
 {

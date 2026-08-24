@@ -30,6 +30,8 @@ public:
     void update();
 
 private:
+    void turnOffScreen();
+
     uint32_t lastTickMillis = 0;
 
     ScreenManager screenManager;

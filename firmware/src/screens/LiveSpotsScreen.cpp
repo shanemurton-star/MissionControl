@@ -18,10 +18,11 @@ void LiveSpotsScreen::begin(ClockService& clockService, LiveSpotsService& spotsS
     });
     lv_obj_t* backButton = lv_btn_create(screen);
     lv_obj_set_pos(backButton, 8, Theme::CONTENT_TOP);
-    lv_obj_set_size(backButton, 116, 36);
+    lv_obj_set_size(backButton, 116, 30);
     lv_obj_set_style_bg_color(backButton, Theme::color(Theme::COLOR_PANEL), LV_PART_MAIN);
     lv_obj_set_style_border_color(backButton, Theme::color(Theme::COLOR_PANEL_BORDER), LV_PART_MAIN);
     lv_obj_set_style_border_width(backButton, 1, LV_PART_MAIN);
+    lv_obj_set_style_radius(backButton, 8, LV_PART_MAIN);
     lv_obj_add_event_cb(backButton, backButtonEventHandler, LV_EVENT_CLICKED, this);
     lv_obj_center(Theme::createLabel(backButton, LV_SYMBOL_LEFT " DASHBOARD", Theme::COLOR_PRIMARY));
     titleLabel = Theme::createLabel(screen, "LIVE PSK SPOTS", Theme::COLOR_PRIMARY);
@@ -40,6 +41,13 @@ void LiveSpotsScreen::begin(ClockService& clockService, LiveSpotsService& spotsS
 }
 
 void LiveSpotsScreen::show() { if (screen != nullptr) { lv_scr_load(screen); update(); } }
+
+void LiveSpotsScreen::release()
+{
+    if (updateTimer != nullptr) { lv_timer_del(updateTimer); updateTimer = nullptr; }
+    if (screen != nullptr) { lv_obj_del(screen); screen = nullptr; }
+    summaryLabel = recentLabel = statusLabel = titleLabel = nullptr;
+}
 void LiveSpotsScreen::setNavigationCallback(NavigationCallback callback) { navigationCallback = callback; }
 
 void LiveSpotsScreen::update()

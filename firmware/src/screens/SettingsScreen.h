@@ -14,6 +14,9 @@ class SettingsScreen
 {
 public:
     using NavigationCallback = std::function<void(Page)>;
+    using BrightnessCallback = std::function<void(uint8_t)>;
+
+    static void configureBrightnessCallback(BrightnessCallback callback);
 
     void begin(
         ClockService& clockService,
@@ -21,6 +24,7 @@ public:
         WiFiService& wifiService,
         LiveSpotsService& liveSpotsService);
     void show();
+    void release();
     void setNavigationCallback(NavigationCallback callback);
 
 private:
@@ -36,6 +40,10 @@ private:
     static void keyboardButtonEventHandler(lv_event_t* event);
     static void updateTimerCallback(lv_timer_t* timer);
     static void restartTimerCallback(lv_timer_t* timer);
+    static void displayPageButtonEventHandler(lv_event_t* event);
+    static void generalPageButtonEventHandler(lv_event_t* event);
+    static void defaultScreenButtonEventHandler(lv_event_t* event);
+    static void brightnessSliderEventHandler(lv_event_t* event);
 
     void save();
     void saveLocation();
@@ -45,6 +53,11 @@ private:
     void showKeyboard(lv_obj_t* textArea);
     void updateKeyboardKeys();
     void scanForWiFi();
+    void showDisplayPage();
+    void showGeneralPage();
+    void selectDefaultScreen(uint8_t selection);
+    void updateDefaultScreenButtons();
+    void updateBrightnessLabel();
 
     HeaderBar headerBar;
     SettingsService* settingsService = nullptr;
@@ -63,13 +76,23 @@ private:
     lv_obj_t* keyboardButtons[40] = {};
     lv_obj_t* keyboardLabels[40] = {};
     lv_obj_t* statusLabel = nullptr;
+    lv_obj_t* generalPanel = nullptr;
+    lv_obj_t* displayPanel = nullptr;
+    lv_obj_t* displayPageButton = nullptr;
+    lv_obj_t* generalPageButton = nullptr;
+    lv_obj_t* brightnessSlider = nullptr;
+    lv_obj_t* brightnessValueLabel = nullptr;
+    lv_obj_t* defaultScreenButtons[7] = {};
     lv_obj_t* wifiScanOverlay = nullptr;
     lv_obj_t* wifiScanStatusLabel = nullptr;
     lv_obj_t* wifiNetworkButtons[8] = {};
     lv_obj_t* wifiNetworkLabels[8] = {};
     String scannedSsids[8];
     lv_timer_t* updateTimer = nullptr;
+    lv_timer_t* restartTimer = nullptr;
     bool restartPending = false;
     bool uppercaseKeyboard = false;
     bool symbolKeyboard = false;
+
+    static BrightnessCallback brightnessCallback;
 };

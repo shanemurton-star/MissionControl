@@ -16,10 +16,10 @@ namespace Theme
     constexpr int16_t CONTENT_BOTTOM = FOOTER_TOP - 8;
 
     // Mission Control color palette
-    constexpr uint32_t COLOR_BACKGROUND = 0x11191D;
-    constexpr uint32_t COLOR_HEADER = 0x030B10;
-    constexpr uint32_t COLOR_PANEL = 0x02080C;
-    constexpr uint32_t COLOR_PANEL_BORDER = 0x1B272D;
+    constexpr uint32_t COLOR_BACKGROUND = 0x020304;
+    constexpr uint32_t COLOR_HEADER = 0x010203;
+    constexpr uint32_t COLOR_PANEL = 0x030608;
+    constexpr uint32_t COLOR_PANEL_BORDER = 0x20272B;
 
     constexpr uint32_t COLOR_PRIMARY = 0x32C7E8;
     constexpr uint32_t COLOR_TEXT = 0xFFFFFF;

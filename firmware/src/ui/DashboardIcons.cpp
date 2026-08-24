@@ -40,6 +40,30 @@ namespace
     const lv_img_dsc_t WEATHER_FOG = {
         {LV_IMG_CF_RAW_ALPHA, 0, 0, 64, 64},
         sizeof(assets_icons_weather_fog_png), assets_icons_weather_fog_png};
+
+    const lv_img_dsc_t* weatherSource(const String& condition)
+    {
+        String text = condition;
+        text.toUpperCase();
+
+        if (text.indexOf("THUNDER") >= 0 || text.indexOf("STORM") >= 0)
+            return &WEATHER_STORM;
+        if (text.indexOf("SNOW") >= 0 || text.indexOf("SLEET") >= 0 ||
+            text.indexOf("ICE") >= 0)
+            return &WEATHER_SNOW;
+        if (text.indexOf("RAIN") >= 0 || text.indexOf("SHOWER") >= 0 ||
+            text.indexOf("DRIZZLE") >= 0)
+            return &WEATHER_RAIN;
+        if (text.indexOf("FOG") >= 0 || text.indexOf("MIST") >= 0 ||
+            text.indexOf("HAZE") >= 0)
+            return &WEATHER_FOG;
+        if (text.indexOf("CLEAR") >= 0 || text.indexOf("SUNNY") >= 0)
+            return &WEATHER_SUNNY;
+        if (text.indexOf("OVERCAST") >= 0 ||
+            (text.indexOf("CLOUD") >= 0 && text.indexOf("PART") < 0))
+            return &WEATHER_CLOUDY;
+        return &WEATHER_PARTLY;
+    }
 }
 
 lv_obj_t* DashboardIcons::create(
@@ -66,23 +90,20 @@ lv_obj_t* DashboardIcons::create(
 void DashboardIcons::setWeatherCondition(lv_obj_t* image, const String& condition)
 {
     if (image == nullptr) return;
-    String text = condition;
-    text.toUpperCase();
+    lv_img_set_src(image, weatherSource(condition));
+}
 
-    const lv_img_dsc_t* source = &WEATHER_PARTLY;
-    if (text.indexOf("THUNDER") >= 0 || text.indexOf("STORM") >= 0)
-        source = &WEATHER_STORM;
-    else if (text.indexOf("SNOW") >= 0 || text.indexOf("SLEET") >= 0 || text.indexOf("ICE") >= 0)
-        source = &WEATHER_SNOW;
-    else if (text.indexOf("RAIN") >= 0 || text.indexOf("SHOWER") >= 0 || text.indexOf("DRIZZLE") >= 0)
-        source = &WEATHER_RAIN;
-    else if (text.indexOf("FOG") >= 0 || text.indexOf("MIST") >= 0 || text.indexOf("HAZE") >= 0)
-        source = &WEATHER_FOG;
-    else if (text.indexOf("CLEAR") >= 0 || text.indexOf("SUNNY") >= 0)
-        source = &WEATHER_SUNNY;
-    else if (text.indexOf("OVERCAST") >= 0 ||
-             (text.indexOf("CLOUD") >= 0 && text.indexOf("PART") < 0))
-        source = &WEATHER_CLOUDY;
-
-    lv_img_set_src(image, source);
+void DashboardIcons::warmCache(const String& weatherCondition)
+{
+    // Decode compressed assets before the dashboard becomes active. With the
+    // old two-entry cache LVGL decoded these during the visible partial refresh,
+    // which made the page appear to sweep or shift horizontally.
+    const lv_color_t white = lv_color_white();
+    _lv_img_cache_open(&AIRCRAFT, white, 0);
+    _lv_img_cache_open(&LIVE_SPOTS, white, 0);
+    _lv_img_cache_open(&POTA, white, 0);
+    _lv_img_cache_open(&SATELLITE, white, 0);
+    _lv_img_cache_open(&SOLAR, white, 0);
+    _lv_img_cache_open(weatherSource(weatherCondition), white, 0);
+    _lv_img_cache_open(&LIVE_SPOTS, lv_color_hex(0xAEB8C4), 0);
 }

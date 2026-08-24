@@ -53,6 +53,10 @@ struct AppSettings
 
     uint8_t displayBrightness = 80;
 
+    // Stored as a stable settings value rather than the Page enum so future
+    // navigation changes do not invalidate an existing user preference.
+    uint8_t defaultScreen = 0;
+
 
     // --------------------------------------------------------
     // Weather

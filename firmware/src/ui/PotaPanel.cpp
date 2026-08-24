@@ -17,7 +17,7 @@ void PotaPanel::create(
     panel = Theme::createPanel(parent, x, y, width, height, "POTA SPOTS");
     lv_obj_add_flag(panel, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(panel, panelEventHandler, LV_EVENT_CLICKED, this);
-    lv_obj_t* title=lv_obj_get_child(panel,0); lv_obj_set_style_text_color(title,Theme::color(0xB02BFA),0); lv_obj_align(title,LV_ALIGN_TOP_MID,0,0);
+    lv_obj_t* title=lv_obj_get_child(panel,0); lv_obj_set_style_text_color(title,Theme::color(Theme::COLOR_TEXT),0); lv_obj_align(title,LV_ALIGN_TOP_MID,0,0);
     DashboardIcons::create(panel,DashboardIcons::Type::Pota,12,43,0xB02BFA);
     countLabel=Theme::createLabel(panel,"--",Theme::COLOR_TEXT,&lv_font_montserrat_28); lv_obj_align(countLabel,LV_ALIGN_TOP_MID,40,50);
     statusLabel = Theme::createLabel(panel, "WAITING FOR POTA", Theme::COLOR_TEXT_MUTED);

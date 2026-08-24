@@ -20,6 +20,8 @@ public:
     const AircraftData& getAircraft(uint8_t index) const;
     uint32_t getLastUpdateTime() const;
     const String& getLastError() const;
+    double getCenterLatitude() const;
+    double getCenterLongitude() const;
 
 private:
     static constexpr unsigned long REFRESH_INTERVAL_MS = 3UL * 60UL * 1000UL;

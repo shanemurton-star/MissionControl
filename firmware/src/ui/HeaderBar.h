@@ -12,8 +12,10 @@ class HeaderBar
 public:
     using SettingsCallback = std::function<void()>;
     using NavigationCallback = std::function<void(Page)>;
+    using ScreenOffCallback = std::function<void()>;
 
     static void configureSettings(const AppSettings& settings);
+    static void configureScreenOffCallback(ScreenOffCallback callback);
 
     void create(
         lv_obj_t* parent,
@@ -22,19 +24,22 @@ public:
         int16_t height);
 
     void update();
+    void useLocationIdentity(bool enabled = true);
     void setSettingsCallback(SettingsCallback callback);
     void setNavigationCallback(NavigationCallback callback);
 
 private:
-    static constexpr uint8_t MENU_ITEM_COUNT = 7;
+    static constexpr uint8_t MENU_ITEM_COUNT = 8;
     static void settingsEventHandler(lv_event_t* event);
     static void menuEventHandler(lv_event_t* event);
     static void menuItemEventHandler(lv_event_t* event);
     static void menuOverlayEventHandler(lv_event_t* event);
+    static void screenOffEventHandler(lv_event_t* event);
     void createMenu(lv_obj_t* parent);
     void showMenu();
     void hideMenu();
     static const AppSettings* appSettings;
+    static ScreenOffCallback screenOffCallback;
 
     ClockService* clockService = nullptr;
 
@@ -46,8 +51,10 @@ private:
     lv_obj_t* dateLabel = nullptr;
     lv_obj_t* utcTimeLabel = nullptr;
     lv_obj_t* menuOverlay = nullptr;
+    lv_obj_t* screenOffButton = nullptr;
     lv_obj_t* menuButtons[MENU_ITEM_COUNT] = {};
 
     SettingsCallback settingsCallback;
     NavigationCallback navigationCallback;
+    bool locationIdentity = false;
 };

@@ -44,6 +44,13 @@ namespace
     }
 }
 
+SettingsScreen::BrightnessCallback SettingsScreen::brightnessCallback = nullptr;
+
+void SettingsScreen::configureBrightnessCallback(BrightnessCallback callback)
+{
+    brightnessCallback = callback;
+}
+
 void SettingsScreen::begin(
     ClockService& clockService,
     SettingsService& settingsServiceReference,
@@ -65,20 +72,32 @@ void SettingsScreen::begin(
 
     lv_obj_t* backButton = lv_btn_create(screen);
     lv_obj_set_pos(backButton, 8, Theme::CONTENT_TOP);
-    lv_obj_set_size(backButton, 116, 36);
+    lv_obj_set_size(backButton, 116, 30);
     styleButton(backButton);
+    lv_obj_set_style_radius(backButton, 8, LV_PART_MAIN);
     lv_obj_add_event_cb(backButton, backButtonEventHandler, LV_EVENT_CLICKED, this);
     lv_obj_center(Theme::createLabel(backButton, LV_SYMBOL_LEFT " DASHBOARD", Theme::COLOR_PRIMARY));
 
     lv_obj_t* title = Theme::createLabel(screen, "SYSTEM SETTINGS", Theme::COLOR_PRIMARY);
     lv_obj_align(title, LV_ALIGN_TOP_LEFT, 140, Theme::CONTENT_TOP + 10);
 
+    displayPageButton = lv_btn_create(screen);
+    lv_obj_set_pos(displayPageButton, 286, Theme::CONTENT_TOP);
+    lv_obj_set_size(displayPageButton, 126, 30);
+    styleButton(displayPageButton);
+    lv_obj_set_style_radius(displayPageButton, 8, LV_PART_MAIN);
+    lv_obj_add_event_cb(
+        displayPageButton, displayPageButtonEventHandler, LV_EVENT_CLICKED, this);
+    lv_obj_center(Theme::createLabel(
+        displayPageButton, "DISPLAY " LV_SYMBOL_RIGHT, Theme::COLOR_PRIMARY));
+
     statusLabel = Theme::createLabel(screen, "", Theme::COLOR_TEXT_MUTED);
-    lv_obj_set_pos(statusLabel, 410, Theme::CONTENT_TOP + 9);
-    lv_obj_set_width(statusLabel, 380);
+    lv_obj_set_pos(statusLabel, 430, Theme::CONTENT_TOP + 4);
+    lv_obj_set_width(statusLabel, 360);
     lv_obj_set_style_text_align(statusLabel, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
 
     lv_obj_t* panel = Theme::createPanel(screen, 8, 110, 784, 152, "WI-FI AND LOCATION");
+    generalPanel = panel;
 
     lv_obj_t* wifiScanButton = lv_btn_create(panel);
     lv_obj_set_pos(wifiScanButton, 0, 25);
@@ -234,6 +253,74 @@ void SettingsScreen::begin(
     lv_obj_add_event_cb(closeScanButton, wifiScanCloseEventHandler, LV_EVENT_CLICKED, this);
     lv_obj_center(Theme::createLabel(closeScanButton, "CLOSE", Theme::COLOR_TEXT));
 
+    displayPanel = Theme::createPanel(
+        screen, 8, 110, 784, 328, "DISPLAY & STARTUP");
+    lv_obj_add_flag(displayPanel, LV_OBJ_FLAG_HIDDEN);
+
+    generalPageButton = lv_btn_create(displayPanel);
+    lv_obj_set_pos(generalPageButton, 630, 0);
+    lv_obj_set_size(generalPageButton, 126, 30);
+    styleButton(generalPageButton);
+    lv_obj_set_style_radius(generalPageButton, 8, LV_PART_MAIN);
+    lv_obj_add_event_cb(
+        generalPageButton, generalPageButtonEventHandler, LV_EVENT_CLICKED, this);
+    lv_obj_center(Theme::createLabel(
+        generalPageButton, LV_SYMBOL_LEFT " GENERAL", Theme::COLOR_PRIMARY));
+
+    lv_obj_t* description = Theme::createLabel(
+        displayPanel,
+        "DEFAULT SCREEN\nChoose the screen shown after startup. Detail screens remain memory-efficient and load only when needed.",
+        Theme::COLOR_TEXT_MUTED);
+    lv_obj_set_pos(description, 0, 38);
+    lv_obj_set_width(description, 756);
+    lv_label_set_long_mode(description, LV_LABEL_LONG_WRAP);
+
+    const char* defaultScreenNames[7] = {
+        "DASHBOARD", "WEATHER", "AIRCRAFT", "SATELLITES",
+        "SOLAR", "LIVE SPOTS", "POTA SPOTS"
+    };
+    for (uint8_t index = 0; index < 7; ++index)
+    {
+        defaultScreenButtons[index] = lv_btn_create(displayPanel);
+        const uint8_t column = index % 4;
+        const uint8_t row = index / 4;
+        lv_obj_set_pos(defaultScreenButtons[index], column * 190, 108 + row * 76);
+        lv_obj_set_size(defaultScreenButtons[index], 178, 62);
+        styleButton(defaultScreenButtons[index]);
+        lv_obj_add_event_cb(
+            defaultScreenButtons[index], defaultScreenButtonEventHandler,
+            LV_EVENT_CLICKED, this);
+        lv_obj_center(Theme::createLabel(
+            defaultScreenButtons[index], defaultScreenNames[index], Theme::COLOR_TEXT));
+    }
+
+    lv_obj_t* brightnessLabel = Theme::createLabel(
+        displayPanel, "BRIGHTNESS", Theme::COLOR_TEXT_MUTED);
+    lv_obj_set_pos(brightnessLabel, 0, 274);
+
+    brightnessSlider = lv_slider_create(displayPanel);
+    lv_obj_set_pos(brightnessSlider, 112, 270);
+    lv_obj_set_size(brightnessSlider, 550, 18);
+    lv_slider_set_range(brightnessSlider, 10, 100);
+    lv_obj_set_style_bg_color(
+        brightnessSlider, Theme::color(Theme::COLOR_PANEL_BORDER), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(
+        brightnessSlider, Theme::color(Theme::COLOR_PRIMARY), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(
+        brightnessSlider, Theme::color(Theme::COLOR_TEXT), LV_PART_KNOB);
+    lv_obj_set_style_pad_all(brightnessSlider, 4, LV_PART_KNOB);
+    lv_obj_add_event_cb(
+        brightnessSlider, brightnessSliderEventHandler, LV_EVENT_ALL, this);
+
+    brightnessValueLabel = Theme::createLabel(
+        displayPanel, "80%", Theme::COLOR_TEXT);
+    lv_obj_set_pos(brightnessValueLabel, 682, 272);
+    lv_obj_set_width(brightnessValueLabel, 72);
+    lv_obj_set_style_text_align(
+        brightnessValueLabel, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
+
+    updateDefaultScreenButtons();
+
     updateStatus();
     updateTimer = lv_timer_create(updateTimerCallback, 1000, this);
 }
@@ -247,16 +334,104 @@ void SettingsScreen::show()
     lv_textarea_set_text(postalCodeTextArea, settings.postalCode.c_str());
     lv_textarea_set_text(gridSquareTextArea, settings.gridSquare.c_str());
     lv_textarea_set_text(callsignTextArea, settings.callsign.c_str());
+    if (brightnessSlider != nullptr)
+    {
+        const uint8_t brightness = constrain(settings.displayBrightness, 10, 100);
+        lv_slider_set_value(brightnessSlider, brightness, LV_ANIM_OFF);
+        updateBrightnessLabel();
+    }
     lv_scr_load(screen);
     lv_obj_add_flag(keyboard, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(wifiScanOverlay, LV_OBJ_FLAG_HIDDEN);
+    showGeneralPage();
     activeTextArea = nullptr;
     updateStatus();
+}
+
+void SettingsScreen::release()
+{
+    if (restartTimer != nullptr) { lv_timer_del(restartTimer); restartTimer = nullptr; }
+    if (updateTimer != nullptr) { lv_timer_del(updateTimer); updateTimer = nullptr; }
+    if (screen != nullptr) { lv_obj_del(screen); screen = nullptr; }
+    ssidTextArea = passwordTextArea = postalCodeTextArea = nullptr;
+    gridSquareTextArea = callsignTextArea = keyboard = activeTextArea = nullptr;
+    statusLabel = wifiScanOverlay = wifiScanStatusLabel = nullptr;
+    generalPanel = displayPanel = displayPageButton = generalPageButton = nullptr;
+    brightnessSlider = brightnessValueLabel = nullptr;
+    for (uint8_t i = 0; i < 7; ++i) defaultScreenButtons[i] = nullptr;
+    for (uint8_t i = 0; i < 40; ++i) keyboardButtons[i] = keyboardLabels[i] = nullptr;
+    for (uint8_t i = 0; i < 8; ++i)
+    {
+        wifiNetworkButtons[i] = wifiNetworkLabels[i] = nullptr;
+        scannedSsids[i] = "";
+    }
+    restartPending = false;
 }
 
 void SettingsScreen::setNavigationCallback(NavigationCallback callback)
 {
     navigationCallback = callback;
+}
+
+void SettingsScreen::showDisplayPage()
+{
+    if (displayPanel == nullptr) return;
+    lv_obj_add_flag(keyboard, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(wifiScanOverlay, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(generalPanel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(displayPageButton, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(displayPanel, LV_OBJ_FLAG_HIDDEN);
+    activeTextArea = nullptr;
+    updateDefaultScreenButtons();
+}
+
+void SettingsScreen::showGeneralPage()
+{
+    if (generalPanel == nullptr) return;
+    lv_obj_add_flag(displayPanel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(generalPanel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(displayPageButton, LV_OBJ_FLAG_HIDDEN);
+}
+
+void SettingsScreen::selectDefaultScreen(uint8_t selection)
+{
+    if (settingsService == nullptr || selection > 6) return;
+    AppSettings updated = settingsService->get();
+    updated.defaultScreen = selection;
+    if (settingsService->save(updated))
+    {
+        lv_label_set_text(statusLabel, "DEFAULT SCREEN SAVED");
+        lv_obj_set_style_text_color(
+            statusLabel, Theme::color(Theme::COLOR_SUCCESS), LV_PART_MAIN);
+        updateDefaultScreenButtons();
+    }
+}
+
+void SettingsScreen::updateDefaultScreenButtons()
+{
+    if (settingsService == nullptr) return;
+    const uint8_t selected = settingsService->get().defaultScreen;
+    for (uint8_t index = 0; index < 7; ++index)
+    {
+        if (defaultScreenButtons[index] == nullptr) continue;
+        lv_obj_set_style_bg_color(
+            defaultScreenButtons[index],
+            Theme::color(index == selected ? 0x134A57 : Theme::COLOR_PANEL),
+            LV_PART_MAIN);
+        lv_obj_set_style_border_color(
+            defaultScreenButtons[index],
+            Theme::color(index == selected ? Theme::COLOR_PRIMARY : Theme::COLOR_PANEL_BORDER),
+            LV_PART_MAIN);
+        lv_obj_set_style_border_width(
+            defaultScreenButtons[index], index == selected ? 2 : 1, LV_PART_MAIN);
+    }
+}
+
+void SettingsScreen::updateBrightnessLabel()
+{
+    if (brightnessSlider == nullptr || brightnessValueLabel == nullptr) return;
+    const String value = String(lv_slider_get_value(brightnessSlider)) + "%";
+    lv_label_set_text(brightnessValueLabel, value.c_str());
 }
 
 void SettingsScreen::saveLocation()
@@ -339,8 +514,8 @@ void SettingsScreen::saveLocation()
     lv_label_set_text(statusLabel, message.c_str());
     lv_obj_set_style_text_color(statusLabel, Theme::color(Theme::COLOR_SUCCESS), LV_PART_MAIN);
     restartPending = true;
-    lv_timer_t* timer = lv_timer_create(restartTimerCallback, 1800, this);
-    lv_timer_set_repeat_count(timer, 1);
+    restartTimer = lv_timer_create(restartTimerCallback, 1800, this);
+    lv_timer_set_repeat_count(restartTimer, 1);
 }
 
 void SettingsScreen::saveGridSquare()
@@ -434,16 +609,18 @@ void SettingsScreen::save()
     updated.wifiSsid = ssid;
     updated.wifiPassword = password;
 
-    if (!settingsService->save(updated))
+    if (!settingsService->stageWiFiSettings(updated))
     {
-        lv_label_set_text(statusLabel, "Unable to save settings");
+        lv_label_set_text(statusLabel, "Unable to stage WiFi settings");
         lv_obj_set_style_text_color(statusLabel, Theme::color(Theme::COLOR_ERROR), LV_PART_MAIN);
         return;
     }
 
-    lv_label_set_text(statusLabel, "Saved\nConnecting...");
+    lv_label_set_text(statusLabel, "APPLYING WIFI\nRESTARTING...");
     lv_obj_set_style_text_color(statusLabel, Theme::color(Theme::COLOR_WARNING), LV_PART_MAIN);
-    wifiService->begin(settingsService->get());
+    restartPending = true;
+    restartTimer = lv_timer_create(restartTimerCallback, 1800, this);
+    lv_timer_set_repeat_count(restartTimer, 1);
 }
 
 void SettingsScreen::updateStatus()
@@ -451,7 +628,12 @@ void SettingsScreen::updateStatus()
     if (statusLabel == nullptr) return;
     headerBar.update();
     if (restartPending) return;
-    if (WiFi.status() == WL_CONNECTED)
+    if (settingsService->didWiFiCandidateFail() || wifiService->wereCredentialsRejected())
+    {
+        lv_label_set_text(statusLabel, "CREDENTIALS REJECTED\nCHECK PASSWORD");
+        lv_obj_set_style_text_color(statusLabel, Theme::color(Theme::COLOR_ERROR), LV_PART_MAIN);
+    }
+    else if (WiFi.status() == WL_CONNECTED)
     {
         const String status = "CONNECTED\n" + WiFi.localIP().toString() + "\n" + String(WiFi.RSSI()) + " dBm";
         lv_label_set_text(statusLabel, status.c_str());
@@ -670,4 +852,58 @@ void SettingsScreen::restartTimerCallback(lv_timer_t* timer)
 {
     (void)timer;
     ESP.restart();
+}
+
+void SettingsScreen::displayPageButtonEventHandler(lv_event_t* event)
+{
+    SettingsScreen* self = static_cast<SettingsScreen*>(lv_event_get_user_data(event));
+    if (self != nullptr) self->showDisplayPage();
+}
+
+void SettingsScreen::generalPageButtonEventHandler(lv_event_t* event)
+{
+    SettingsScreen* self = static_cast<SettingsScreen*>(lv_event_get_user_data(event));
+    if (self != nullptr) self->showGeneralPage();
+}
+
+void SettingsScreen::defaultScreenButtonEventHandler(lv_event_t* event)
+{
+    SettingsScreen* self = static_cast<SettingsScreen*>(lv_event_get_user_data(event));
+    if (self == nullptr) return;
+    lv_obj_t* target = lv_event_get_target(event);
+    for (uint8_t index = 0; index < 7; ++index)
+    {
+        if (self->defaultScreenButtons[index] == target)
+        {
+            self->selectDefaultScreen(index);
+            return;
+        }
+    }
+}
+
+void SettingsScreen::brightnessSliderEventHandler(lv_event_t* event)
+{
+    SettingsScreen* self = static_cast<SettingsScreen*>(lv_event_get_user_data(event));
+    if (self == nullptr || self->brightnessSlider == nullptr) return;
+
+    const lv_event_code_t code = lv_event_get_code(event);
+    const uint8_t brightness = static_cast<uint8_t>(
+        lv_slider_get_value(self->brightnessSlider));
+
+    if (code == LV_EVENT_VALUE_CHANGED)
+    {
+        self->updateBrightnessLabel();
+        if (brightnessCallback != nullptr) brightnessCallback(brightness);
+    }
+    else if (code == LV_EVENT_RELEASED && self->settingsService != nullptr)
+    {
+        AppSettings updated = self->settingsService->get();
+        updated.displayBrightness = brightness;
+        if (self->settingsService->save(updated))
+        {
+            lv_label_set_text(self->statusLabel, "BRIGHTNESS SAVED");
+            lv_obj_set_style_text_color(
+                self->statusLabel, Theme::color(Theme::COLOR_SUCCESS), LV_PART_MAIN);
+        }
+    }
 }

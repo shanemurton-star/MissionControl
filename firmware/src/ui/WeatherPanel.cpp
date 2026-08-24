@@ -40,39 +40,7 @@ namespace
     void configurePanel(
         lv_obj_t* panel)
     {
-        lv_obj_set_style_bg_color(
-            panel,
-            colorFromHex(0x02080C),
-            LV_PART_MAIN);
-
-        lv_obj_set_style_bg_opa(
-            panel,
-            LV_OPA_COVER,
-            LV_PART_MAIN);
-
-        lv_obj_set_style_border_color(
-            panel,
-            Theme::color(Theme::COLOR_PANEL_BORDER),
-            LV_PART_MAIN);
-
-        lv_obj_set_style_border_width(
-            panel,
-            1,
-            LV_PART_MAIN);
-
-        lv_obj_set_style_radius(
-            panel,
-            8,
-            LV_PART_MAIN);
-
-        lv_obj_set_style_pad_all(
-            panel,
-            10,
-            LV_PART_MAIN);
-
-        lv_obj_clear_flag(
-            panel,
-            LV_OBJ_FLAG_SCROLLABLE);
+        Theme::configurePanel(panel);
     }
 }
 
