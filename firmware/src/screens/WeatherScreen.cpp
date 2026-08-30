@@ -217,7 +217,7 @@ void WeatherScreen::begin(
         screen, 8, 318, 784, 120, "");
     atmosphereDetailLabel = Theme::createLabel(
         summaryPanel,
-        "DEW -- F   PRESSURE --.-- inHg",
+        "DEW -- F   PRESSURE --.-- inHg   UV INDEX --",
         Theme::COLOR_TEXT_MUTED);
     lv_obj_set_pos(atmosphereDetailLabel, 0, 79);
     lv_obj_set_width(atmosphereDetailLabel, 430);
@@ -411,7 +411,8 @@ void WeatherScreen::update()
     }
 
     String atmosphere = "DEW " + weatherService->getDewPoint() +
-        "   PRESSURE " + weatherService->getPressure();
+        "   PRESSURE " + weatherService->getPressure() +
+        "   UV INDEX " + valueOrDash(weather.uvIndex, 1, "");
     lv_label_set_text(atmosphereDetailLabel, atmosphere.c_str());
 
     DailyForecastSummary dailyForecasts[2];

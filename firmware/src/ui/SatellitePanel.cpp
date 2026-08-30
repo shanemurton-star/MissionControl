@@ -17,14 +17,10 @@ namespace
         return buffer;
     }
 
-    String formatCountdown(uint32_t target, uint32_t now)
+    String compactSatelliteName(const String& name)
     {
-        if (target <= now) return "IN PASS";
-        uint32_t remaining = target - now;
-        char buffer[20];
-        snprintf(buffer, sizeof(buffer), "T-%02lu:%02lu:%02lu",
-                 remaining / 3600UL, (remaining / 60UL) % 60UL, remaining % 60UL);
-        return buffer;
+        if (name.startsWith("ISS")) return "ISS";
+        return name;
     }
 
     const char* direction(float azimuth)
@@ -57,6 +53,54 @@ void SatellitePanel::create(lv_obj_t* parent, SatelliteService& serviceReference
 void SatellitePanel::update()
 {
     if (service == nullptr) return;
+
+    uint8_t visible = 0;
+    int8_t highestSatellite = -1;
+    int8_t secondHighestSatellite = -1;
+    float highestElevation = -91.0f;
+    float secondHighestElevation = -91.0f;
+
+    if (service->isValid())
+    {
+        for (uint8_t i = 0; i < SatelliteService::SATELLITE_COUNT; ++i)
+        {
+            const SatelliteData& satellite = service->getSatellite(i);
+            if (!satellite.valid || !satellite.visible) continue;
+
+            ++visible;
+            if (satellite.currentElevation > highestElevation)
+            {
+                secondHighestElevation = highestElevation;
+                secondHighestSatellite = highestSatellite;
+                highestElevation = satellite.currentElevation;
+                highestSatellite = static_cast<int8_t>(i);
+            }
+            else if (satellite.currentElevation > secondHighestElevation)
+            {
+                secondHighestElevation = satellite.currentElevation;
+                secondHighestSatellite = static_cast<int8_t>(i);
+            }
+        }
+    }
+
+    if (visible > 0 && highestSatellite >= 0)
+    {
+        String activeText = compactSatelliteName(service->getSatellite(highestSatellite).name);
+        if (visible == 2 && secondHighestSatellite >= 0)
+        {
+            activeText += " + " + compactSatelliteName(service->getSatellite(secondHighestSatellite).name);
+        }
+        else if (visible > 2)
+        {
+            activeText += " +" + String(visible - 1) + " MORE";
+        }
+        activeText += visible == 1 ? "\nIN PASS" : "\n" + String(visible) + " IN PASS";
+
+        lv_label_set_text(nameLabel, activeText.c_str());
+        lv_label_set_text(countdownLabel, String(visible).c_str());
+        return;
+    }
+
     const SatelliteData* pass = service->getNextPass();
     if (!service->isValid() || pass == nullptr)
     {
@@ -67,10 +111,8 @@ void SatellitePanel::update()
         return;
     }
 
-    const uint32_t now = static_cast<uint32_t>(time(nullptr));
     String passText = pass->name + "\nNext " + formatTime(pass->aosTime);
     lv_label_set_text(nameLabel, passText.c_str());
-    uint8_t visible=0; for(uint8_t i=0;i<SatelliteService::SATELLITE_COUNT;++i) if(service->getSatellite(i).visible) ++visible;
     lv_label_set_text(countdownLabel, String(visible).c_str());
     const uint32_t durationMinutes = (pass->losTime - pass->aosTime + 30) / 60;
     String details = "AOS          " + formatTime(pass->aosTime) +

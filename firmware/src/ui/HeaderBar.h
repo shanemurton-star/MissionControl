@@ -48,8 +48,10 @@ private:
     lv_obj_t* identityLabel = nullptr;
     lv_obj_t* wifiStatusLabel = nullptr;
     lv_obj_t* localTimeLabel = nullptr;
+    lv_obj_t* localSuffixLabel = nullptr;
     lv_obj_t* dateLabel = nullptr;
     lv_obj_t* utcTimeLabel = nullptr;
+    lv_obj_t* utcSuffixLabel = nullptr;
     lv_obj_t* menuOverlay = nullptr;
     lv_obj_t* screenOffButton = nullptr;
     lv_obj_t* menuButtons[MENU_ITEM_COUNT] = {};

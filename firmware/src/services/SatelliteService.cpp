@@ -17,10 +17,17 @@ namespace
 
     constexpr SatelliteDefinition DEFINITIONS[SatelliteService::SATELLITE_COUNT] = {
         {"ISS (ZARYA)", 25544},
+        {"SO-50", 27607},
+        {"AO-91", 43017},
+        {"RS-44", 44909},
+        {"JO-97", 43803},
+        {"FO-29", 24278},
+        {"AO-7", 7530},
+        {"TEVEL2-3", 63218},
+        {"TEVEL2-7", 63238},
         {"NOAA 15", 25338},
         {"NOAA 18", 28654},
-        {"NOAA 19", 33591},
-        {"SO-50", 27607}
+        {"NOAA 19", 33591}
     };
 
     void trimLine(String& line)
@@ -314,7 +321,7 @@ void SatelliteService::updatePositions()
         satellites[i].currentElevation = predictors[i].satEl;
         satellites[i].rangeKm = predictors[i].satDist;
         satellites[i].visible = predictors[i].satEl >= 0.0;
-        if (satellites[i].valid && now > satellites[i].losTime) needsNewPasses = true;
+        if (satellites[i].valid && now >= satellites[i].losTime) needsNewPasses = true;
     }
     if (needsNewPasses) calculatePasses();
 }
@@ -332,10 +339,13 @@ void SatelliteService::requestRadioData(uint8_t index)
 
 const SatelliteData* SatelliteService::getNextPass() const
 {
+    const uint32_t now = static_cast<uint32_t>(time(nullptr));
     const SatelliteData* next = nullptr;
     for (const SatelliteData& satellite : satellites)
     {
-        if (!satellite.valid) continue;
+        // An active pass is represented separately by the panel's IN PASS
+        // state. Never present its already elapsed AOS as an upcoming pass.
+        if (!satellite.valid || satellite.aosTime <= now) continue;
         if (next == nullptr || satellite.aosTime < next->aosTime) next = &satellite;
     }
     return next;

@@ -29,6 +29,10 @@ private:
     static constexpr unsigned long REQUEST_TIMEOUT_MS = 8000UL;
 
     void fetchAircraft();
+    bool fetchFromSource(
+        const String& url,
+        const char* sourceName,
+        uint8_t& reportedAircraft);
     void calculatePosition(AircraftData& aircraft) const;
     void sortByDistance();
     static bool timeReached(unsigned long targetTime);
@@ -42,5 +46,6 @@ private:
     bool valid = false;
     bool updating = false;
     String requestUrl;
+    String fallbackUrl;
     String lastError;
 };

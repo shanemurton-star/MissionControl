@@ -17,6 +17,7 @@ struct WeatherData
     float windSpeedMph = NAN;
     float windGustMph = NAN;
     float pressureInHg = NAN;
+    float uvIndex = NAN;
 
     bool airQualityValid = false;
     int16_t usAqi = 0;

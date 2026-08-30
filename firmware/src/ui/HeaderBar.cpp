@@ -131,15 +131,35 @@ void HeaderBar::create(lv_obj_t* parent, ClockService& clockServiceReference,
     lv_obj_set_size(footer, width, Theme::FOOTER_HEIGHT);
     Theme::configureHeader(footer);
 
-    localTimeLabel = Theme::createLabel(footer, "--:--:-- LOCAL", Theme::COLOR_TEXT,
+    // Keep the clock values and suffixes in separate, fixed-position zones.
+    // Both times are left-aligned so their starting edges never move as the
+    // proportional Montserrat digits change width.
+    localTimeLabel = Theme::createLabel(footer, "--:--:--", Theme::COLOR_TEXT,
                                         &lv_font_montserrat_20);
+    lv_obj_set_width(localTimeLabel, 108);
+    lv_obj_set_style_text_align(localTimeLabel, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
     lv_obj_align(localTimeLabel, LV_ALIGN_LEFT_MID, 14, 0);
+    localSuffixLabel = Theme::createLabel(
+        footer, "LOCAL", Theme::COLOR_TEXT, &lv_font_montserrat_20);
+    lv_obj_set_width(localSuffixLabel, 70);
+    lv_label_set_long_mode(localSuffixLabel, LV_LABEL_LONG_CLIP);
+    lv_obj_align(localSuffixLabel, LV_ALIGN_LEFT_MID, 108, 0);
+
     dateLabel = Theme::createLabel(footer, "Waiting for time...", Theme::COLOR_TEXT,
                                    &lv_font_montserrat_20);
     lv_obj_align(dateLabel, LV_ALIGN_CENTER, 0, 0);
-    utcTimeLabel = Theme::createLabel(footer, "--:--:-- UTC", Theme::COLOR_TEXT,
+
+    utcTimeLabel = Theme::createLabel(footer, "--:--:--", Theme::COLOR_TEXT,
                                       &lv_font_montserrat_20);
-    lv_obj_align(utcTimeLabel, LV_ALIGN_RIGHT_MID, -14, 0);
+    lv_obj_set_width(utcTimeLabel, 108);
+    lv_obj_set_style_text_align(utcTimeLabel, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+    lv_obj_align(utcTimeLabel, LV_ALIGN_LEFT_MID, 638, 0);
+    utcSuffixLabel = Theme::createLabel(
+        footer, "UTC", Theme::COLOR_TEXT, &lv_font_montserrat_20);
+    lv_obj_set_width(utcSuffixLabel, 56);
+    lv_obj_set_style_text_align(utcSuffixLabel, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+    lv_label_set_long_mode(utcSuffixLabel, LV_LABEL_LONG_CLIP);
+    lv_obj_align(utcSuffixLabel, LV_ALIGN_LEFT_MID, 724, 0);
 
     createMenu(parent);
 
@@ -292,8 +312,8 @@ void HeaderBar::update()
         lv_label_set_text(identityLabel, identity.c_str());
     }
 
-    String local = clockService->getLocalTime() + " LOCAL";
-    String utc = clockService->getUTCTime() + " UTC";
+    const String local = clockService->getLocalTime();
+    const String utc = clockService->getUTCTime();
     lv_label_set_text(localTimeLabel, local.c_str());
     lv_label_set_text(dateLabel, clockService->getDisplayDate().c_str());
     lv_label_set_text(utcTimeLabel, utc.c_str());

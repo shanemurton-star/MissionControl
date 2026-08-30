@@ -929,10 +929,11 @@ void WeatherService::fetchAirQuality()
     const String url =
         String("https://air-quality-api.open-meteo.com/v1/air-quality?latitude=") +
         String(latitude, 4) + "&longitude=" + String(longitude, 4) +
-        "&current=us_aqi,pm2_5,pm10";
+        "&current=us_aqi,pm2_5,pm10,uv_index";
 
     String response;
     currentWeather.airQualityValid = false;
+    currentWeather.uvIndex = NAN;
     if (performRequest(url, response))
     {
         JsonDocument document;
@@ -940,6 +941,8 @@ void WeatherService::fetchAirQuality()
         if (!error)
         {
             JsonObjectConst current = document["current"].as<JsonObjectConst>();
+            if (!current.isNull() && !current["uv_index"].isNull())
+                currentWeather.uvIndex = current["uv_index"].as<float>();
             if (!current.isNull() && !current["us_aqi"].isNull())
             {
                 currentWeather.usAqi = static_cast<int16_t>(current["us_aqi"].as<float>() + 0.5f);

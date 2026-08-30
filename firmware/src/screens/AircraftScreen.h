@@ -41,6 +41,7 @@ private:
     lv_obj_t* targets[AircraftService::MAX_AIRCRAFT] = {};
     lv_obj_t* targetLabels[AircraftService::MAX_AIRCRAFT] = {};
     lv_obj_t* targetLeaderLines[AircraftService::MAX_AIRCRAFT] = {};
+    lv_point_t targetArrowPoints[AircraftService::MAX_AIRCRAFT][5] = {};
     lv_point_t targetLeaderPoints[AircraftService::MAX_AIRCRAFT][2] = {};
     HeaderBar headerBar;
     HeaderBar detailHeaderBar;

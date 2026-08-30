@@ -235,26 +235,15 @@ void setup()
         aircraftService.update();
 
         // DNS on this display becomes unreliable after the RGB/LVGL hardware
-        // stack starts. CelesTrak now has bounded connection/handshake limits,
-        // so load its five initial TLEs in the proven pre-display DNS window.
+        // stack starts, so load every initial TLE in the proven pre-display
+        // DNS window. Radio channels are fetched only when a detail page is
+        // opened; preloading them all would double startup network traffic.
         for (uint8_t satellite = 0;
              satellite < SatelliteService::SATELLITE_COUNT;
              ++satellite)
         {
             satelliteService.update();
             delay(10);
-        }
-
-        if (satelliteService.isValid())
-        {
-            for (uint8_t satellite = 0;
-                 satellite < SatelliteService::SATELLITE_COUNT;
-                 ++satellite)
-            {
-                satelliteService.requestRadioData(satellite);
-                satelliteService.update();
-                delay(10);
-            }
         }
 
         // Load the numeric solar data now, but leave the large JPEG decoder

@@ -12,6 +12,7 @@ struct AircraftData
     String category;
     String emergency;
     String squawk;
+    uint8_t databaseFlags = 0;
     double latitude = 0.0;
     double longitude = 0.0;
     float distanceNm = 0.0f;

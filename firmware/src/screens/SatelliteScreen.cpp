@@ -270,7 +270,9 @@ void SatelliteScreen::update()
     }
     lv_obj_add_flag(statusLabel, LV_OBJ_FLAG_HIDDEN);
 
-    uint8_t order[SatelliteService::SATELLITE_COUNT] = {0, 1, 2, 3, 4};
+    uint8_t order[SatelliteService::SATELLITE_COUNT];
+    for (uint8_t i = 0; i < SatelliteService::SATELLITE_COUNT; ++i)
+        order[i] = i;
     for (uint8_t i = 1; i < SatelliteService::SATELLITE_COUNT; ++i)
     {
         uint8_t value = order[i];

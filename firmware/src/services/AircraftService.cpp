@@ -23,9 +23,16 @@ void AircraftService::begin(const AppSettings& settings)
 {
     latitude = settings.latitude;
     longitude = settings.longitude;
-    requestUrl = String("https://opendata.adsb.fi/api/v3/lat/") +
+    requestUrl = String("https://api.adsb.lol/v2/point/") +
+        String(latitude, 5) + "/" + String(longitude, 5) + "/" +
+        String(SEARCH_RADIUS_NM, 0);
+    fallbackUrl = String("https://opendata.adsb.fi/api/v3/lat/") +
         String(latitude, 5) + "/lon/" + String(longitude, 5) + "/dist/" +
         String(SEARCH_RADIUS_NM, 0);
+    aircraftCount = 0;
+    valid = false;
+    updating = false;
+    lastError = "";
     nextActionMs = 0;
 }
 
@@ -43,6 +50,64 @@ void AircraftService::fetchAircraft()
     updating = true;
     lastError = "";
 
+    uint8_t reportedAircraft = 0;
+    bool success = fetchFromSource(requestUrl, "adsb.lol", reportedAircraft);
+
+    // A genuine zero is possible, but it is unusual around the configured
+    // location. Confirm it through the independent compatible source before
+    // publishing zero to the dashboard.
+    if (!success || aircraftCount == 0)
+    {
+        const bool primarySucceeded = success;
+        const String primaryError = lastError;
+        uint8_t fallbackReported = 0;
+        const bool fallbackSucceeded =
+            fetchFromSource(fallbackUrl, "adsb.fi", fallbackReported);
+        if (fallbackSucceeded)
+        {
+            success = true;
+            reportedAircraft = fallbackReported;
+        }
+        else if (primarySucceeded)
+        {
+            // The primary source successfully confirmed an empty result.
+            success = true;
+            lastError = "";
+        }
+        else
+        {
+            lastError = primaryError + "; fallback: " + lastError;
+        }
+    }
+
+    if (!success)
+    {
+        valid = false;
+        updating = false;
+        nextActionMs = millis() + RETRY_INTERVAL_MS;
+        return;
+    }
+
+    sortByDistance();
+    valid = true;
+    updating = false;
+    lastUpdateTime = static_cast<uint32_t>(time(nullptr));
+    nextActionMs = millis() + REFRESH_INTERVAL_MS;
+
+    Serial.print("[AircraftService] Tracking ");
+    Serial.print(aircraftCount);
+    Serial.print(" of ");
+    Serial.print(reportedAircraft);
+    Serial.println(" reported aircraft within 25 nm");
+}
+
+bool AircraftService::fetchFromSource(
+    const String& url,
+    const char* sourceName,
+    uint8_t& reportedAircraft)
+{
+    reportedAircraft = 0;
+
     WiFiClientSecure secureClient;
     secureClient.setInsecure();
 
@@ -51,24 +116,30 @@ void AircraftService::fetchAircraft()
     http.setTimeout(REQUEST_TIMEOUT_MS);
     http.setUserAgent("MissionControl-ESP32/1.0");
 
-    if (!http.begin(secureClient, requestUrl))
+    if (!http.begin(secureClient, url))
     {
-        lastError = "Unable to start aircraft request";
-        updating = false;
-        nextActionMs = millis() + RETRY_INTERVAL_MS;
-        return;
+        lastError = String(sourceName) + ": unable to start request";
+        return false;
     }
 
     const int responseCode = http.GET();
     if (responseCode < 200 || responseCode >= 300)
     {
         lastError = responseCode < 0
-            ? String("Aircraft connection: ") + HTTPClient::errorToString(responseCode)
-            : String("Aircraft API HTTP ") + responseCode;
+            ? String(sourceName) + ": " + HTTPClient::errorToString(responseCode)
+            : String(sourceName) + " HTTP " + responseCode;
         http.end();
-        updating = false;
-        nextActionMs = millis() + RETRY_INTERVAL_MS;
-        return;
+        return false;
+    }
+
+    // Buffering the bounded regional response lets HTTPClient completely
+    // decode chunked transfer framing before ArduinoJson examines the body.
+    const String response = http.getString();
+    http.end();
+    if (response.isEmpty())
+    {
+        lastError = String(sourceName) + ": empty response";
+        return false;
     }
 
     JsonDocument filter;
@@ -79,6 +150,7 @@ void AircraftService::fetchAircraft()
     itemFilter["t"] = true;
     itemFilter["desc"] = true;
     itemFilter["category"] = true;
+    itemFilter["dbFlags"] = true;
     itemFilter["emergency"] = true;
     itemFilter["lat"] = true;
     itemFilter["lon"] = true;
@@ -96,23 +168,35 @@ void AircraftService::fetchAircraft()
     JsonDocument document;
     const DeserializationError error = deserializeJson(
         document,
-        http.getStream(),
+        response,
         DeserializationOption::Filter(filter));
-    http.end();
 
     if (error)
     {
-        lastError = String("Aircraft data error: ") + error.c_str();
-        updating = false;
-        nextActionMs = millis() + RETRY_INTERVAL_MS;
-        return;
+        lastError = String(sourceName) + " data: " + error.c_str();
+        return false;
     }
 
+    const JsonArrayConst sources = document["ac"].as<JsonArrayConst>();
+    reportedAircraft = static_cast<uint8_t>(
+        min(static_cast<size_t>(255), sources.isNull() ? 0 : sources.size()));
     aircraftCount = 0;
-    for (JsonObject source : document["ac"].as<JsonArray>())
+    for (JsonObjectConst source : sources)
     {
         if (aircraftCount >= MAX_AIRCRAFT ||
-            !source["lat"].is<double>() || !source["lon"].is<double>())
+            source["lat"].isNull() || source["lon"].isNull())
+        {
+            continue;
+        }
+
+        // ArduinoJson may retain decimal coordinates as either float or
+        // double depending on its build configuration. Convert any numeric
+        // representation instead of rejecting everything that is not stored
+        // specifically as a double.
+        const double aircraftLatitude = source["lat"].as<double>();
+        const double aircraftLongitude = source["lon"].as<double>();
+        if (isnan(aircraftLatitude) || isinf(aircraftLatitude) ||
+            isnan(aircraftLongitude) || isinf(aircraftLongitude))
         {
             continue;
         }
@@ -125,10 +209,11 @@ void AircraftService::fetchAircraft()
         target.type = cleanString(source["t"] | "");
         target.description = cleanString(source["desc"] | "");
         target.category = cleanString(source["category"] | "");
+        target.databaseFlags = source["dbFlags"] | 0;
         target.emergency = cleanString(source["emergency"] | "");
         target.squawk = cleanString(source["squawk"] | "");
-        target.latitude = source["lat"] | 0.0;
-        target.longitude = source["lon"] | 0.0;
+        target.latitude = aircraftLatitude;
+        target.longitude = aircraftLongitude;
         target.groundSpeedKnots = source["gs"] | 0.0f;
         target.indicatedSpeedKnots = source["ias"] | 0.0f;
         target.mach = source["mach"] | 0.0f;
@@ -150,15 +235,15 @@ void AircraftService::fetchAircraft()
         calculatePosition(target);
     }
 
-    sortByDistance();
-    valid = true;
-    updating = false;
-    lastUpdateTime = static_cast<uint32_t>(time(nullptr));
-    nextActionMs = millis() + REFRESH_INTERVAL_MS;
-
-    Serial.print("[AircraftService] Tracking ");
+    Serial.print("[AircraftService] ");
+    Serial.print(sourceName);
+    Serial.print(" accepted ");
     Serial.print(aircraftCount);
-    Serial.println(" aircraft within 25 nm");
+    Serial.print(" of ");
+    Serial.print(reportedAircraft);
+    Serial.println(" records");
+    lastError = "";
+    return true;
 }
 
 void AircraftService::calculatePosition(AircraftData& target) const

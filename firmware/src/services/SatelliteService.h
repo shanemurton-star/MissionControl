@@ -9,7 +9,7 @@
 class SatelliteService
 {
 public:
-    static constexpr uint8_t SATELLITE_COUNT = 5;
+    static constexpr uint8_t SATELLITE_COUNT = 12;
 
     void begin(const AppSettings& settings);
     void update();

@@ -8,6 +8,93 @@
 
 namespace
 {
+    enum class RadarCategory : uint8_t
+    {
+        Light,
+        Airliner,
+        Military,
+        Other
+    };
+
+    constexpr uint32_t RADAR_LIGHT_COLOR = 0x52E018;
+    constexpr uint32_t RADAR_AIRLINER_COLOR = 0x19C9E8;
+    constexpr uint32_t RADAR_MILITARY_COLOR = 0xFFAA33;
+    constexpr uint32_t RADAR_OTHER_COLOR = 0xA7B0BE;
+
+    bool startsWithAny(
+        const String& value, const char* const* prefixes, size_t count)
+    {
+        for (size_t index = 0; index < count; ++index)
+            if (value.startsWith(prefixes[index])) return true;
+        return false;
+    }
+
+    RadarCategory radarCategoryFor(const AircraftData& aircraft)
+    {
+        // readsb/ADSBExchange-compatible feeds define bit zero as military.
+        if ((aircraft.databaseFlags & 1U) != 0) return RadarCategory::Military;
+
+        String type = aircraft.type;
+        String category = aircraft.category;
+        type.toUpperCase();
+        category.toUpperCase();
+
+        const char* const airlinerPrefixes[] = {
+            "A2", "A3", "A30", "A31", "A32", "A33", "A34", "A35", "A38",
+            "B7", "BCS", "CRJ", "E17", "E19", "E75", "E90", "E95",
+            "AT4", "AT7", "DH8", "SF34", "MD", "DC9", "DC10", "L101"};
+        if (category == "A3" || category == "A4" || category == "A5" ||
+            startsWithAny(
+                type, airlinerPrefixes,
+                sizeof(airlinerPrefixes) / sizeof(airlinerPrefixes[0])))
+        {
+            return RadarCategory::Airliner;
+        }
+
+        const char* const lightPrefixes[] = {
+            "C1", "C2", "C3", "PA", "P28", "P32", "P34", "P46",
+            "BE2", "BE3", "BE5", "SR2", "DA2", "DA4", "DV20"};
+        if (category == "A1" || startsWithAny(
+                type, lightPrefixes,
+                sizeof(lightPrefixes) / sizeof(lightPrefixes[0])))
+        {
+            return RadarCategory::Light;
+        }
+
+        return RadarCategory::Other;
+    }
+
+    uint32_t radarColor(RadarCategory category)
+    {
+        switch (category)
+        {
+            case RadarCategory::Light: return RADAR_LIGHT_COLOR;
+            case RadarCategory::Airliner: return RADAR_AIRLINER_COLOR;
+            case RadarCategory::Military: return RADAR_MILITARY_COLOR;
+            case RadarCategory::Other:
+            default: return RADAR_OTHER_COLOR;
+        }
+    }
+
+    void createLegendItem(
+        lv_obj_t* parent, int16_t x, const char* text, uint32_t color)
+    {
+        lv_obj_t* block = lv_obj_create(parent);
+        lv_obj_set_pos(block, x, Theme::CONTENT_TOP + 10);
+        lv_obj_set_size(block, 9, 9);
+        lv_obj_set_style_bg_color(block, Theme::color(color), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(block, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_border_width(block, 0, LV_PART_MAIN);
+        lv_obj_set_style_radius(block, 2, LV_PART_MAIN);
+        lv_obj_set_style_pad_all(block, 0, LV_PART_MAIN);
+        lv_obj_clear_flag(block, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_clear_flag(block, LV_OBJ_FLAG_CLICKABLE);
+
+        lv_obj_t* label = Theme::createLabel(
+            parent, text, Theme::COLOR_TEXT_MUTED, &lv_font_montserrat_14);
+        lv_obj_set_pos(label, x + 13, Theme::CONTENT_TOP + 6);
+    }
+
     lv_obj_t* createRadarReferenceLine(
         lv_obj_t* parent, int16_t width, int16_t height,
         int16_t xOffset, int16_t yOffset, lv_opa_t opacity)
@@ -51,13 +138,19 @@ void AircraftScreen::begin(ClockService& clockService, AircraftService& service)
     lv_obj_add_event_cb(backButton, backButtonEventHandler, LV_EVENT_CLICKED, this);
     lv_obj_center(Theme::createLabel(backButton, LV_SYMBOL_LEFT " DASHBOARD", Theme::COLOR_PRIMARY));
 
-    lv_obj_t* title = Theme::createLabel(screen, "LIVE AIRCRAFT DETAIL", Theme::COLOR_PRIMARY);
-    lv_obj_align(title, LV_ALIGN_TOP_LEFT, 140, Theme::CONTENT_TOP + 10);
+    createLegendItem(screen, 140, "LIGHT", RADAR_LIGHT_COLOR);
+    createLegendItem(screen, 207, "AIRLINER", RADAR_AIRLINER_COLOR);
+    createLegendItem(screen, 298, "MILITARY", RADAR_MILITARY_COLOR);
+    createLegendItem(screen, 397, "OTHER", RADAR_OTHER_COLOR);
     countLabel = Theme::createLabel(screen, "-- AIRCRAFT WITHIN 25 NM", Theme::COLOR_TEXT);
     lv_obj_align(countLabel, LV_ALIGN_TOP_RIGHT, -8, Theme::CONTENT_TOP + 10);
 
-    radarScope = Theme::createPanel(screen, 8, 110, 500, 328, "AIRSPACE  |  25 NM RANGE");
+    radarScope = Theme::createPanel(screen, 8, 110, 500, 328, "");
     lv_obj_t* scope = radarScope;
+
+    radarPositionLabel = Theme::createLabel(
+        scope, "HOME", Theme::COLOR_PRIMARY, &lv_font_montserrat_14);
+    lv_obj_align(radarPositionLabel, LV_ALIGN_TOP_LEFT, 0, 0);
 
     // Geographic reference grid. It is deliberately procedural so the radar
     // remains useful at any configured location without downloading map tiles.
@@ -109,10 +202,6 @@ void AircraftScreen::begin(ClockService& clockService, AircraftService& service)
             10 + rangeOffset[index]);
     }
 
-    radarPositionLabel = Theme::createLabel(
-        scope, "HOME", Theme::COLOR_TEXT_DIM, &lv_font_montserrat_14);
-    lv_obj_align(radarPositionLabel, LV_ALIGN_CENTER, 0, 28);
-
     for (uint8_t i = 0; i < AircraftService::MAX_AIRCRAFT; ++i)
     {
         targetLeaderLines[i] = lv_line_create(scope);
@@ -125,12 +214,19 @@ void AircraftScreen::begin(ClockService& clockService, AircraftService& service)
         lv_obj_clear_flag(targetLeaderLines[i], LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(targetLeaderLines[i], LV_OBJ_FLAG_HIDDEN);
 
-        targets[i] = lv_obj_create(scope);
-        lv_obj_set_size(targets[i], 7, 7);
-        lv_obj_set_style_radius(targets[i], LV_RADIUS_CIRCLE, LV_PART_MAIN);
-        lv_obj_set_style_bg_color(targets[i], Theme::color(Theme::COLOR_SUCCESS), LV_PART_MAIN);
-        lv_obj_set_style_border_width(targets[i], 0, LV_PART_MAIN);
-        lv_obj_clear_flag(targets[i], LV_OBJ_FLAG_SCROLLABLE);
+        targets[i] = lv_line_create(scope);
+        lv_obj_set_size(targets[i], 15, 15);
+        targetArrowPoints[i][0] = {7, 1};
+        targetArrowPoints[i][1] = {2, 13};
+        targetArrowPoints[i][2] = {7, 10};
+        targetArrowPoints[i][3] = {12, 13};
+        targetArrowPoints[i][4] = {7, 1};
+        lv_line_set_points(targets[i], targetArrowPoints[i], 5);
+        lv_obj_set_style_line_color(
+            targets[i], Theme::color(RADAR_OTHER_COLOR), LV_PART_MAIN);
+        lv_obj_set_style_line_width(targets[i], 2, LV_PART_MAIN);
+        lv_obj_set_style_line_rounded(targets[i], true, LV_PART_MAIN);
+        lv_obj_clear_flag(targets[i], LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(targets[i], LV_OBJ_FLAG_HIDDEN);
         targetLabels[i] = Theme::createLabel(scope, "", Theme::COLOR_TEXT_MUTED, &lv_font_montserrat_14);
         lv_obj_add_flag(targetLabels[i], LV_OBJ_FLAG_HIDDEN);
@@ -174,6 +270,7 @@ void AircraftScreen::begin(ClockService& clockService, AircraftService& service)
             aircraftRowButtons[index], aircraftRowEventHandler, LV_EVENT_CLICKED, this);
         aircraftRowLabels[index] = Theme::createLabel(
             aircraftRowButtons[index], "", Theme::COLOR_TEXT_MUTED);
+        lv_label_set_recolor(aircraftRowLabels[index], true);
         lv_obj_set_width(aircraftRowLabels[index], 226);
         lv_obj_align(aircraftRowLabels[index], LV_ALIGN_LEFT_MID, 0, 0);
 
@@ -334,7 +431,13 @@ void AircraftScreen::update()
         const AircraftData& item = aircraftService->getAircraft(i);
         String name = !item.callsign.isEmpty() ? item.callsign :
             (!item.registration.isEmpty() ? item.registration : item.hex);
-        String row = name + "   " + String(item.distanceNm, 1) + " nm\n";
+        const uint32_t categoryColor = radarColor(radarCategoryFor(item));
+        char categoryColorHex[7];
+        snprintf(
+            categoryColorHex, sizeof(categoryColorHex), "%06lX",
+            static_cast<unsigned long>(categoryColor));
+        String row = "#" + String(categoryColorHex) + " " + name +
+            "#   " + String(item.distanceNm, 1) + " nm\n";
         row += item.onGround ? "GROUND" : String(static_cast<int>(item.altitudeFeet)) + " ft";
         row += "   " + String(static_cast<int>(item.groundSpeedKnots)) + " kt";
         lv_label_set_text(aircraftRowLabels[i], row.c_str());
@@ -367,6 +470,32 @@ void AircraftScreen::update()
         const float radius = (item.distanceNm / AircraftService::SEARCH_RADIUS_NM) * 145.0f;
         const int16_t x = static_cast<int16_t>(sin(radians) * radius);
         const int16_t y = static_cast<int16_t>(-cos(radians) * radius) + 10;
+
+        const RadarCategory radarCategory = radarCategoryFor(item);
+        const uint32_t categoryColor = radarColor(radarCategory);
+        const float trackRadians = item.trackDegrees * DEG_TO_RAD;
+        constexpr float center = 7.0f;
+        constexpr int8_t basePoints[5][2] = {
+            {0, -6}, {-5, 6}, {0, 3}, {5, 6}, {0, -6}};
+        for (uint8_t point = 0; point < 5; ++point)
+        {
+            const float baseX = basePoints[point][0];
+            const float baseY = basePoints[point][1];
+            targetArrowPoints[i][point] = {
+                static_cast<lv_coord_t>(center +
+                    baseX * cosf(trackRadians) - baseY * sinf(trackRadians)),
+                static_cast<lv_coord_t>(center +
+                    baseX * sinf(trackRadians) + baseY * cosf(trackRadians))};
+        }
+        lv_line_set_points(targets[i], targetArrowPoints[i], 5);
+        lv_obj_set_style_line_color(
+            targets[i], Theme::color(categoryColor), LV_PART_MAIN);
+        lv_obj_set_style_text_color(
+            targetLabels[i], Theme::color(categoryColor), LV_PART_MAIN);
+        lv_obj_set_style_line_color(
+            targetLeaderLines[i], Theme::color(categoryColor), LV_PART_MAIN);
+        lv_obj_set_style_line_opa(
+            targetLeaderLines[i], LV_OPA_40, LV_PART_MAIN);
         lv_obj_align(targets[i], LV_ALIGN_CENTER, x, y);
         lv_obj_clear_flag(targets[i], LV_OBJ_FLAG_HIDDEN);
         String shortName = !item.callsign.isEmpty() ? item.callsign : item.hex;
@@ -470,7 +599,7 @@ void AircraftScreen::update()
         const float deltaX = labelAnchorX - dotCenterX;
         const float deltaY = labelAnchorY - dotCenterY;
         const float length = sqrtf(deltaX * deltaX + deltaY * deltaY);
-        const float markerRadius = 5.0f;
+        const float markerRadius = 8.0f;
         const float dotAnchorX = length > 0.1f
             ? dotCenterX + deltaX * markerRadius / length : dotCenterX;
         const float dotAnchorY = length > 0.1f
