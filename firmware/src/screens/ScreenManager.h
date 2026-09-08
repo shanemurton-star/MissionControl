@@ -7,10 +7,12 @@
 #include "SatelliteScreen.h"
 #include "SolarScreen.h"
 #include "LiveSpotsScreen.h"
+#include "SignalReachScreen.h"
 #include "StartupScreen.h"
 #include "WeatherScreen.h"
 #include "SettingsScreen.h"
 #include "PotaScreen.h"
+#include "CallsignLookupScreen.h"
 
 #include "../models/Page.h"
 #include "../services/ClockService.h"
@@ -22,6 +24,7 @@
 #include "../services/SettingsService.h"
 #include "../services/WiFiService.h"
 #include "../services/PotaService.h"
+#include "../services/WsjtxService.h"
 
 class ScreenManager
 {
@@ -34,6 +37,7 @@ public:
         SolarService& solarService,
         LiveSpotsService& liveSpotsService,
         PotaService& potaService,
+        WsjtxService& wsjtxService,
         SettingsService& settingsService,
         WiFiService& wifiService);
 
@@ -44,8 +48,10 @@ public:
     void showSatelliteScreen();
     void showSolarScreen();
     void showLiveSpotsScreen();
+    void showSignalReachScreen();
     void showSettingsScreen();
     void showPotaScreen();
+    void showCallsignLookupScreen();
 
     WeatherScreen& getWeatherScreen();
 
@@ -64,8 +70,10 @@ private:
     SatelliteScreen satelliteScreen;
     SolarScreen solarScreen;
     LiveSpotsScreen liveSpotsScreen;
+    SignalReachScreen signalReachScreen;
     SettingsScreen settingsScreen;
     PotaScreen potaScreen;
+    CallsignLookupScreen callsignLookupScreen;
 
     lv_timer_t* startupTimer = nullptr;
     Page currentPage = Page::Dashboard;
@@ -79,4 +87,5 @@ private:
     SettingsService* settingsService = nullptr;
     WiFiService* wifiService = nullptr;
     PotaService* potaService = nullptr;
+    WsjtxService* wsjtxService = nullptr;
 };

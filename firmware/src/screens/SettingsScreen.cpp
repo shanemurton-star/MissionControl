@@ -55,13 +55,15 @@ void SettingsScreen::begin(
     ClockService& clockService,
     SettingsService& settingsServiceReference,
     WiFiService& wifiServiceReference,
-    LiveSpotsService& liveSpotsServiceReference)
+    LiveSpotsService& liveSpotsServiceReference,
+    WsjtxService& wsjtxServiceReference)
 {
     if (screen != nullptr) return;
 
     settingsService = &settingsServiceReference;
     wifiService = &wifiServiceReference;
     liveSpotsService = &liveSpotsServiceReference;
+    wsjtxService = &wsjtxServiceReference;
 
     screen = lv_obj_create(nullptr);
     Theme::configureScreen(screen);
@@ -91,9 +93,21 @@ void SettingsScreen::begin(
     lv_obj_center(Theme::createLabel(
         displayPageButton, "DISPLAY " LV_SYMBOL_RIGHT, Theme::COLOR_PRIMARY));
 
+    lookupPageButton = lv_btn_create(screen);
+    lv_obj_set_pos(lookupPageButton, 420, Theme::CONTENT_TOP);
+    lv_obj_set_size(lookupPageButton, 184, 30);
+    styleButton(lookupPageButton);
+    lv_obj_set_style_radius(lookupPageButton, 8, LV_PART_MAIN);
+    lv_obj_add_event_cb(
+        lookupPageButton, lookupPageButtonEventHandler, LV_EVENT_CLICKED, this);
+    lv_obj_center(Theme::createLabel(
+        lookupPageButton, "CALLSIGN LOOKUP", Theme::COLOR_PRIMARY,
+        &lv_font_montserrat_12));
+
     statusLabel = Theme::createLabel(screen, "", Theme::COLOR_TEXT_MUTED);
-    lv_obj_set_pos(statusLabel, 430, Theme::CONTENT_TOP + 4);
-    lv_obj_set_width(statusLabel, 360);
+    lv_obj_set_pos(statusLabel, 612, Theme::CONTENT_TOP + 2);
+    lv_obj_set_width(statusLabel, 178);
+    lv_obj_set_style_text_font(statusLabel, &lv_font_montserrat_12, LV_PART_MAIN);
     lv_obj_set_style_text_align(statusLabel, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
 
     lv_obj_t* panel = Theme::createPanel(screen, 8, 110, 784, 152, "WI-FI AND LOCATION");
@@ -319,6 +333,92 @@ void SettingsScreen::begin(
     lv_obj_set_style_text_align(
         brightnessValueLabel, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
 
+    lookupPanel = Theme::createPanel(
+        screen, 8, 110, 784, 328, "CALLSIGN LOOKUP & WSJT-X");
+    lv_obj_add_flag(lookupPanel, LV_OBJ_FLAG_HIDDEN);
+
+    lookupGeneralPageButton = lv_btn_create(lookupPanel);
+    lv_obj_set_pos(lookupGeneralPageButton, 630, 0);
+    lv_obj_set_size(lookupGeneralPageButton, 126, 30);
+    styleButton(lookupGeneralPageButton);
+    lv_obj_set_style_radius(lookupGeneralPageButton, 8, LV_PART_MAIN);
+    lv_obj_add_event_cb(
+        lookupGeneralPageButton, generalPageButtonEventHandler, LV_EVENT_CLICKED, this);
+    lv_obj_center(Theme::createLabel(
+        lookupGeneralPageButton, LV_SYMBOL_LEFT " GENERAL", Theme::COLOR_PRIMARY));
+
+    lv_obj_t* providerLabel = Theme::createLabel(
+        lookupPanel, "CALLBOOK", Theme::COLOR_TEXT_MUTED);
+    lv_obj_set_pos(providerLabel, 0, 39);
+    const char* providerNames[2] = {"HAMQTH", "QRZ"};
+    for (uint8_t index = 0; index < 2; ++index)
+    {
+        lookupProviderButtons[index] = lv_btn_create(lookupPanel);
+        lv_obj_set_pos(lookupProviderButtons[index], 88 + index * 112, 30);
+        lv_obj_set_size(lookupProviderButtons[index], 102, 38);
+        styleButton(lookupProviderButtons[index]);
+        lv_obj_add_event_cb(
+            lookupProviderButtons[index], lookupProviderButtonEventHandler,
+            LV_EVENT_CLICKED, this);
+        lv_obj_center(Theme::createLabel(
+            lookupProviderButtons[index], providerNames[index], Theme::COLOR_TEXT));
+    }
+
+    const char* lookupLabels[4] = {"USERNAME", "PASSWORD", "MULTICAST GROUP", "UDP PORT"};
+    const int16_t lookupX[4] = {0, 180, 360, 552};
+    const int16_t lookupW[4] = {168, 168, 180, 92};
+    lv_obj_t** lookupFields[4] = {
+        &lookupUsernameTextArea, &lookupPasswordTextArea,
+        &udpGroupTextArea, &udpPortTextArea
+    };
+    for (uint8_t index = 0; index < 4; ++index)
+    {
+        lv_obj_t* label = Theme::createLabel(
+            lookupPanel, lookupLabels[index], Theme::COLOR_TEXT_MUTED,
+            &lv_font_montserrat_12);
+        lv_obj_set_pos(label, lookupX[index], 78);
+        *lookupFields[index] = lv_textarea_create(lookupPanel);
+        lv_obj_set_pos(*lookupFields[index], lookupX[index], 98);
+        lv_obj_set_size(*lookupFields[index], lookupW[index], 42);
+        lv_textarea_set_one_line(*lookupFields[index], true);
+        styleTextArea(*lookupFields[index]);
+        lv_obj_add_event_cb(
+            *lookupFields[index], textAreaEventHandler, LV_EVENT_PRESSED, this);
+    }
+    lv_textarea_set_max_length(lookupUsernameTextArea, 32);
+    lv_textarea_set_password_mode(lookupPasswordTextArea, true);
+    lv_textarea_set_max_length(lookupPasswordTextArea, 64);
+    lv_textarea_set_accepted_chars(udpGroupTextArea, "0123456789.");
+    lv_textarea_set_max_length(udpGroupTextArea, 15);
+    lv_textarea_set_accepted_chars(udpPortTextArea, "0123456789");
+    lv_textarea_set_max_length(udpPortTextArea, 5);
+
+    lv_obj_t* lookupSaveButton = lv_btn_create(lookupPanel);
+    lv_obj_set_pos(lookupSaveButton, 656, 82);
+    lv_obj_set_size(lookupSaveButton, 100, 58);
+    styleButton(lookupSaveButton);
+    lv_obj_set_style_bg_color(
+        lookupSaveButton, Theme::color(0x134A57), LV_PART_MAIN);
+    lv_obj_add_event_cb(
+        lookupSaveButton, lookupSaveButtonEventHandler, LV_EVENT_CLICKED, this);
+    lv_obj_center(Theme::createLabel(
+        lookupSaveButton, "SAVE", Theme::COLOR_TEXT));
+
+    lv_obj_t* lookupHelp = Theme::createLabel(
+        lookupPanel,
+        "Set WSJT-X UDP Server to the same multicast group and port. HamQTH works with a free account; QRZ callbook access requires an eligible XML subscription. Credentials are stored locally on this panel.",
+        Theme::COLOR_TEXT_MUTED);
+    lv_obj_set_pos(lookupHelp, 0, 162);
+    lv_obj_set_width(lookupHelp, 756);
+    lv_label_set_long_mode(lookupHelp, LV_LABEL_LONG_WRAP);
+
+    lookupStatusLabel = Theme::createLabel(
+        lookupPanel, "", Theme::COLOR_TEXT_MUTED);
+    lv_obj_set_pos(lookupStatusLabel, 0, 245);
+    lv_obj_set_width(lookupStatusLabel, 756);
+    lv_obj_set_style_text_align(
+        lookupStatusLabel, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+
     updateDefaultScreenButtons();
 
     updateStatus();
@@ -334,6 +434,16 @@ void SettingsScreen::show()
     lv_textarea_set_text(postalCodeTextArea, settings.postalCode.c_str());
     lv_textarea_set_text(gridSquareTextArea, settings.gridSquare.c_str());
     lv_textarea_set_text(callsignTextArea, settings.callsign.c_str());
+    selectedLookupProvider = settings.callsignLookupProvider;
+    lv_textarea_set_text(
+        lookupUsernameTextArea, settings.callsignLookupUsername.c_str());
+    lv_textarea_set_text(
+        lookupPasswordTextArea, settings.callsignLookupPassword.c_str());
+    lv_textarea_set_text(
+        udpGroupTextArea, settings.wsjtxMulticastAddress.c_str());
+    lv_textarea_set_text(
+        udpPortTextArea, String(settings.wsjtxUdpPort).c_str());
+    updateLookupProviderButtons();
     if (brightnessSlider != nullptr)
     {
         const uint8_t brightness = constrain(settings.displayBrightness, 10, 100);
@@ -356,7 +466,12 @@ void SettingsScreen::release()
     ssidTextArea = passwordTextArea = postalCodeTextArea = nullptr;
     gridSquareTextArea = callsignTextArea = keyboard = activeTextArea = nullptr;
     statusLabel = wifiScanOverlay = wifiScanStatusLabel = nullptr;
-    generalPanel = displayPanel = displayPageButton = generalPageButton = nullptr;
+    generalPanel = displayPanel = lookupPanel = nullptr;
+    displayPageButton = lookupPageButton = generalPageButton =
+        lookupGeneralPageButton = nullptr;
+    lookupUsernameTextArea = lookupPasswordTextArea = udpGroupTextArea =
+        udpPortTextArea = lookupStatusLabel = nullptr;
+    lookupProviderButtons[0] = lookupProviderButtons[1] = nullptr;
     brightnessSlider = brightnessValueLabel = nullptr;
     for (uint8_t i = 0; i < 7; ++i) defaultScreenButtons[i] = nullptr;
     for (uint8_t i = 0; i < 40; ++i) keyboardButtons[i] = keyboardLabels[i] = nullptr;
@@ -380,17 +495,101 @@ void SettingsScreen::showDisplayPage()
     lv_obj_add_flag(wifiScanOverlay, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(generalPanel, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(displayPageButton, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(lookupPageButton, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(lookupPanel, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(displayPanel, LV_OBJ_FLAG_HIDDEN);
     activeTextArea = nullptr;
     updateDefaultScreenButtons();
+}
+
+void SettingsScreen::showLookupPage()
+{
+    if (lookupPanel == nullptr) return;
+    lv_obj_add_flag(keyboard, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(wifiScanOverlay, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(generalPanel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(displayPanel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(displayPageButton, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(lookupPageButton, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(lookupPanel, LV_OBJ_FLAG_HIDDEN);
+    activeTextArea = nullptr;
+    updateLookupProviderButtons();
 }
 
 void SettingsScreen::showGeneralPage()
 {
     if (generalPanel == nullptr) return;
     lv_obj_add_flag(displayPanel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(lookupPanel, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(generalPanel, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(displayPageButton, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(lookupPageButton, LV_OBJ_FLAG_HIDDEN);
+}
+
+void SettingsScreen::updateLookupProviderButtons()
+{
+    for (uint8_t index = 0; index < 2; ++index)
+    {
+        if (lookupProviderButtons[index] == nullptr) continue;
+        const bool selected = index == selectedLookupProvider;
+        lv_obj_set_style_bg_color(
+            lookupProviderButtons[index],
+            Theme::color(selected ? 0x134A57 : Theme::COLOR_PANEL), LV_PART_MAIN);
+        lv_obj_set_style_border_color(
+            lookupProviderButtons[index],
+            Theme::color(selected ? Theme::COLOR_PRIMARY : Theme::COLOR_PANEL_BORDER),
+            LV_PART_MAIN);
+        lv_obj_set_style_border_width(
+            lookupProviderButtons[index], selected ? 2 : 1, LV_PART_MAIN);
+    }
+}
+
+void SettingsScreen::saveLookupSettings()
+{
+    if (settingsService == nullptr) return;
+    String username = lv_textarea_get_text(lookupUsernameTextArea);
+    String password = lv_textarea_get_text(lookupPasswordTextArea);
+    String multicast = lv_textarea_get_text(udpGroupTextArea);
+    const uint32_t port = String(lv_textarea_get_text(udpPortTextArea)).toInt();
+    username.trim();
+    multicast.trim();
+
+    IPAddress group;
+    if (!group.fromString(multicast) || group[0] < 224 || group[0] > 239)
+    {
+        lv_label_set_text(lookupStatusLabel, "ENTER A VALID MULTICAST ADDRESS (224.0.0.0 - 239.255.255.255)");
+        lv_obj_set_style_text_color(
+            lookupStatusLabel, Theme::color(Theme::COLOR_ERROR), LV_PART_MAIN);
+        return;
+    }
+    if (port == 0 || port > 65535)
+    {
+        lv_label_set_text(lookupStatusLabel, "ENTER A VALID UDP PORT");
+        lv_obj_set_style_text_color(
+            lookupStatusLabel, Theme::color(Theme::COLOR_ERROR), LV_PART_MAIN);
+        return;
+    }
+
+    AppSettings updated = settingsService->get();
+    updated.callsignLookupProvider = selectedLookupProvider;
+    updated.callsignLookupUsername = username;
+    updated.callsignLookupPassword = password;
+    updated.wsjtxMulticastAddress = multicast;
+    updated.wsjtxUdpPort = static_cast<uint16_t>(port);
+    if (!settingsService->save(updated))
+    {
+        lv_label_set_text(lookupStatusLabel, "UNABLE TO SAVE CALLSIGN LOOKUP SETTINGS");
+        lv_obj_set_style_text_color(
+            lookupStatusLabel, Theme::color(Theme::COLOR_ERROR), LV_PART_MAIN);
+        return;
+    }
+    if (wsjtxService != nullptr) wsjtxService->configure(settingsService->get());
+
+    const String provider = selectedLookupProvider == 0 ? "HAMQTH" : "QRZ";
+    const String message = provider + " SAVED  |  " + multicast + ":" + String(port);
+    lv_label_set_text(lookupStatusLabel, message.c_str());
+    lv_obj_set_style_text_color(
+        lookupStatusLabel, Theme::color(Theme::COLOR_SUCCESS), LV_PART_MAIN);
 }
 
 void SettingsScreen::selectDefaultScreen(uint8_t selection)
@@ -589,7 +788,8 @@ void SettingsScreen::saveCallsign()
 
     lv_textarea_set_text(callsignTextArea, callsign.c_str());
     headerBar.update();
-    const String message = callsign + " saved";
+    liveSpotsService->begin(settingsService->get());
+    const String message = callsign + " saved - refreshing My Signal Reach";
     lv_label_set_text(statusLabel, message.c_str());
     lv_obj_set_style_text_color(statusLabel, Theme::color(Theme::COLOR_SUCCESS), LV_PART_MAIN);
 }
@@ -771,7 +971,11 @@ void SettingsScreen::textAreaEventHandler(lv_event_t* event)
         self->passwordTextArea,
         self->postalCodeTextArea,
         self->gridSquareTextArea,
-        self->callsignTextArea
+        self->callsignTextArea,
+        self->lookupUsernameTextArea,
+        self->lookupPasswordTextArea,
+        self->udpGroupTextArea,
+        self->udpPortTextArea
     };
     for (lv_obj_t* field : fields)
     {
@@ -796,7 +1000,8 @@ void SettingsScreen::showKeyboard(lv_obj_t* textArea)
 
 void SettingsScreen::updateKeyboardKeys()
 {
-    const bool numeric = activeTextArea == postalCodeTextArea;
+    const bool numeric = activeTextArea == postalCodeTextArea ||
+        activeTextArea == udpPortTextArea;
     const char** keys = symbolKeyboard ? SYMBOL_KEYS :
         (uppercaseKeyboard ? UPPER_KEYS : LOWER_KEYS);
 
@@ -860,10 +1065,38 @@ void SettingsScreen::displayPageButtonEventHandler(lv_event_t* event)
     if (self != nullptr) self->showDisplayPage();
 }
 
+void SettingsScreen::lookupPageButtonEventHandler(lv_event_t* event)
+{
+    SettingsScreen* self = static_cast<SettingsScreen*>(lv_event_get_user_data(event));
+    if (self != nullptr) self->showLookupPage();
+}
+
 void SettingsScreen::generalPageButtonEventHandler(lv_event_t* event)
 {
     SettingsScreen* self = static_cast<SettingsScreen*>(lv_event_get_user_data(event));
     if (self != nullptr) self->showGeneralPage();
+}
+
+void SettingsScreen::lookupProviderButtonEventHandler(lv_event_t* event)
+{
+    SettingsScreen* self = static_cast<SettingsScreen*>(lv_event_get_user_data(event));
+    if (self == nullptr) return;
+    lv_obj_t* target = lv_event_get_target(event);
+    for (uint8_t index = 0; index < 2; ++index)
+    {
+        if (self->lookupProviderButtons[index] == target)
+        {
+            self->selectedLookupProvider = index;
+            self->updateLookupProviderButtons();
+            return;
+        }
+    }
+}
+
+void SettingsScreen::lookupSaveButtonEventHandler(lv_event_t* event)
+{
+    SettingsScreen* self = static_cast<SettingsScreen*>(lv_event_get_user_data(event));
+    if (self != nullptr) self->saveLookupSettings();
 }
 
 void SettingsScreen::defaultScreenButtonEventHandler(lv_event_t* event)

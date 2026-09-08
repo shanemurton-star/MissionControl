@@ -130,6 +130,7 @@ namespace
     lv_indev_drv_t touchDriver;
     bool screenBacklightOff = false;
     bool wakeTouchInProgress = false;
+    bool touchWasPressed = false;
     uint8_t backlightPercent = 100;
 
     uint8_t backlightDuty(uint8_t percent)
@@ -232,6 +233,18 @@ namespace
             data->state = LV_INDEV_STATE_PR;
             data->point.x = touch_last_x;
             data->point.y = touch_last_y;
+            if (!touchWasPressed)
+            {
+                touchWasPressed = true;
+                Serial.print("[Touch] press x=");
+                Serial.print(touch_last_x);
+                Serial.print(" y=");
+                Serial.println(touch_last_y);
+            }
+        }
+        else
+        {
+            touchWasPressed = false;
         }
     }
 }
@@ -244,6 +257,7 @@ bool DisplayService::begin(
     SolarService& solarService,
     LiveSpotsService& liveSpotsService,
     PotaService& potaService,
+    WsjtxService& wsjtxService,
     SettingsService& settingsService,
     WiFiService& wifiService)
 {
@@ -318,6 +332,7 @@ bool DisplayService::begin(
         solarService,
         liveSpotsService,
         potaService,
+        wsjtxService,
         settingsService,
         wifiService);
 

@@ -112,6 +112,15 @@ void HeaderBar::create(lv_obj_t* parent, ClockService& clockServiceReference,
                                        &lv_font_montserrat_28);
     lv_obj_align(identityLabel, LV_ALIGN_CENTER, 0, 0);
 
+    // HeaderBar instances are reused after their LVGL screen is released.
+    // Reset the cached subtitle so the same astronomy text is applied to the
+    // newly created label instead of being mistaken for an unchanged render.
+    secondaryIdentity = "";
+    secondaryIdentityLabel = Theme::createLabel(
+        container, "", Theme::COLOR_TEXT_MUTED, &lv_font_montserrat_14);
+    lv_obj_align(secondaryIdentityLabel, LV_ALIGN_CENTER, 0, 18);
+    lv_obj_add_flag(secondaryIdentityLabel, LV_OBJ_FLAG_HIDDEN);
+
     wifiStatusLabel = Theme::createLabel(container, LV_SYMBOL_WIFI,
                                          Theme::COLOR_WARNING, &lv_font_montserrat_28);
     lv_obj_align(wifiStatusLabel, LV_ALIGN_RIGHT_MID, -24, 0);
@@ -238,6 +247,26 @@ void HeaderBar::useLocationIdentity(bool enabled)
 {
     locationIdentity = enabled;
     update();
+}
+
+void HeaderBar::setSecondaryIdentity(const String& text)
+{
+    if (secondaryIdentityLabel == nullptr || identityLabel == nullptr) return;
+    if (secondaryIdentity == text) return;
+
+    secondaryIdentity = text;
+    lv_label_set_text(secondaryIdentityLabel, secondaryIdentity.c_str());
+    if (secondaryIdentity.isEmpty())
+    {
+        lv_obj_add_flag(secondaryIdentityLabel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_align(identityLabel, LV_ALIGN_CENTER, 0, 0);
+    }
+    else
+    {
+        lv_obj_clear_flag(secondaryIdentityLabel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_align(identityLabel, LV_ALIGN_CENTER, 0, -11);
+        lv_obj_align(secondaryIdentityLabel, LV_ALIGN_CENTER, 0, 18);
+    }
 }
 
 void HeaderBar::settingsEventHandler(lv_event_t* event)

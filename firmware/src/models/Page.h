@@ -8,6 +8,8 @@ enum class Page
     Satellite,
     Solar,
     LiveSpots,
+    SignalReach,
+    CallsignLookup,
     Pota,
     Ham,
     System,

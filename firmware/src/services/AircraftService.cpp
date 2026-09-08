@@ -17,6 +17,18 @@ namespace
         result.trim();
         return result;
     }
+
+    String cleanIdentifier(String value)
+    {
+        value.trim();
+        value.toUpperCase();
+        String result;
+        result.reserve(value.length());
+        for (size_t index = 0; index < value.length(); ++index)
+            if (isalnum(static_cast<unsigned char>(value[index])))
+                result += value[index];
+        return result;
+    }
 }
 
 void AircraftService::begin(const AppSettings& settings)
@@ -33,15 +45,32 @@ void AircraftService::begin(const AppSettings& settings)
     valid = false;
     updating = false;
     lastError = "";
+    pendingRouteCallsign = "";
+    routeCallsign = "";
+    routeAirline = "";
+    routeOriginCode = "";
+    routeOriginCity = "";
+    routeDestinationCode = "";
+    routeDestinationCity = "";
+    routeError = "";
+    routeLookupPending = false;
+    routeLookupComplete = false;
+    routeAvailable = false;
     nextActionMs = 0;
 }
 
 void AircraftService::update()
 {
-    if (!timeReached(nextActionMs) || updating || WiFi.status() != WL_CONNECTED)
+    if (updating || WiFi.status() != WL_CONNECTED)
     {
         return;
     }
+    if (routeLookupPending)
+    {
+        fetchRouteData();
+        return;
+    }
+    if (!timeReached(nextActionMs)) return;
     fetchAircraft();
 }
 
@@ -149,6 +178,7 @@ bool AircraftService::fetchFromSource(
     itemFilter["r"] = true;
     itemFilter["t"] = true;
     itemFilter["desc"] = true;
+    itemFilter["ownOp"] = true;
     itemFilter["category"] = true;
     itemFilter["dbFlags"] = true;
     itemFilter["emergency"] = true;
@@ -208,6 +238,7 @@ bool AircraftService::fetchFromSource(
         target.registration = cleanString(source["r"] | "");
         target.type = cleanString(source["t"] | "");
         target.description = cleanString(source["desc"] | "");
+        target.operatorName = cleanString(source["ownOp"] | "");
         target.category = cleanString(source["category"] | "");
         target.databaseFlags = source["dbFlags"] | 0;
         target.emergency = cleanString(source["emergency"] | "");
@@ -244,6 +275,115 @@ bool AircraftService::fetchFromSource(
     Serial.println(" records");
     lastError = "";
     return true;
+}
+
+void AircraftService::fetchRouteData()
+{
+    const String requestedCallsign = pendingRouteCallsign;
+    routeLookupPending = false;
+    routeLookupComplete = false;
+    routeAvailable = false;
+    routeCallsign = requestedCallsign;
+    routeAirline = "";
+    routeOriginCode = "";
+    routeOriginCity = "";
+    routeDestinationCode = "";
+    routeDestinationCity = "";
+    routeError = "";
+
+    if (requestedCallsign.isEmpty())
+    {
+        routeError = "NO FLIGHT CALLSIGN AVAILABLE";
+        routeLookupComplete = true;
+        return;
+    }
+
+    updating = true;
+    WiFiClientSecure secureClient;
+    secureClient.setInsecure();
+    HTTPClient http;
+    http.setConnectTimeout(REQUEST_TIMEOUT_MS);
+    http.setTimeout(REQUEST_TIMEOUT_MS);
+    http.setUserAgent("MissionControl-ESP32/1.0");
+    const String url =
+        String("https://api.adsbdb.com/v0/callsign/") + requestedCallsign;
+
+    Serial.print("[AircraftService] Looking up route for ");
+    Serial.println(requestedCallsign);
+    if (!http.begin(secureClient, url))
+    {
+        routeError = "ROUTE LOOKUP UNAVAILABLE";
+        updating = false;
+        routeLookupComplete = true;
+        return;
+    }
+
+    const int responseCode = http.GET();
+    Serial.print("[AircraftService] ADSBDB route response: ");
+    Serial.println(responseCode);
+    if (responseCode == 404)
+    {
+        routeError = "ROUTE NOT PUBLISHED";
+        http.end();
+        updating = false;
+        routeLookupComplete = true;
+        return;
+    }
+    if (responseCode < 200 || responseCode >= 300)
+    {
+        routeError = responseCode < 0
+            ? "ROUTE LOOKUP UNAVAILABLE"
+            : String("ROUTE LOOKUP HTTP ") + responseCode;
+        http.end();
+        updating = false;
+        routeLookupComplete = true;
+        return;
+    }
+
+    JsonDocument filter;
+    JsonObject routeFilter = filter["response"]["flightroute"].to<JsonObject>();
+    routeFilter["airline"]["name"] = true;
+    routeFilter["origin"]["iata_code"] = true;
+    routeFilter["origin"]["icao_code"] = true;
+    routeFilter["origin"]["municipality"] = true;
+    routeFilter["destination"]["iata_code"] = true;
+    routeFilter["destination"]["icao_code"] = true;
+    routeFilter["destination"]["municipality"] = true;
+
+    JsonDocument document;
+    const DeserializationError error = deserializeJson(
+        document, http.getStream(), DeserializationOption::Filter(filter));
+    http.end();
+    if (error)
+    {
+        routeError = "ROUTE DATA UNREADABLE";
+        updating = false;
+        routeLookupComplete = true;
+        return;
+    }
+
+    const JsonObjectConst route = document["response"]["flightroute"];
+    if (route.isNull())
+    {
+        routeError = "ROUTE NOT PUBLISHED";
+        updating = false;
+        routeLookupComplete = true;
+        return;
+    }
+
+    routeAirline = cleanString(route["airline"]["name"] | "");
+    routeOriginCode = cleanString(route["origin"]["iata_code"] | "");
+    if (routeOriginCode.isEmpty())
+        routeOriginCode = cleanString(route["origin"]["icao_code"] | "");
+    routeOriginCity = cleanString(route["origin"]["municipality"] | "");
+    routeDestinationCode = cleanString(route["destination"]["iata_code"] | "");
+    if (routeDestinationCode.isEmpty())
+        routeDestinationCode = cleanString(route["destination"]["icao_code"] | "");
+    routeDestinationCity = cleanString(route["destination"]["municipality"] | "");
+    routeAvailable = !routeOriginCode.isEmpty() && !routeDestinationCode.isEmpty();
+    if (!routeAvailable) routeError = "ROUTE NOT PUBLISHED";
+    routeLookupComplete = true;
+    updating = false;
 }
 
 void AircraftService::calculatePosition(AircraftData& target) const
@@ -286,6 +426,31 @@ uint32_t AircraftService::getLastUpdateTime() const { return lastUpdateTime; }
 const String& AircraftService::getLastError() const { return lastError; }
 double AircraftService::getCenterLatitude() const { return latitude; }
 double AircraftService::getCenterLongitude() const { return longitude; }
+
+void AircraftService::requestRouteData(const String& callsign)
+{
+    const String cleaned = cleanIdentifier(callsign);
+    if (cleaned == routeCallsign && routeLookupComplete) return;
+    if (cleaned == pendingRouteCallsign && routeLookupPending) return;
+    pendingRouteCallsign = cleaned;
+    routeLookupPending = true;
+    routeLookupComplete = false;
+    routeAvailable = false;
+    routeError = "";
+}
+
+bool AircraftService::isRouteLookupPending() const { return routeLookupPending; }
+bool AircraftService::hasRouteResultFor(const String& callsign) const
+{
+    return routeLookupComplete && routeCallsign == cleanIdentifier(callsign);
+}
+bool AircraftService::isRouteAvailable() const { return routeAvailable; }
+const String& AircraftService::getRouteAirline() const { return routeAirline; }
+const String& AircraftService::getRouteOriginCode() const { return routeOriginCode; }
+const String& AircraftService::getRouteOriginCity() const { return routeOriginCity; }
+const String& AircraftService::getRouteDestinationCode() const { return routeDestinationCode; }
+const String& AircraftService::getRouteDestinationCity() const { return routeDestinationCity; }
+const String& AircraftService::getRouteError() const { return routeError; }
 
 bool AircraftService::timeReached(unsigned long targetTime)
 {

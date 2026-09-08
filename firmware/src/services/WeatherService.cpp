@@ -95,6 +95,7 @@ void WeatherService::begin(
     stationsUrl = "";
     latestObservationUrl = "";
     forecastUrl = "";
+    hourlyForecastUrl = "";
     alertsUrl =
         String("https://api.weather.gov/alerts/active?point=") +
         String(latitude, 4) +
@@ -177,6 +178,13 @@ void WeatherService::update()
         {
             updating = true;
             fetchForecast();
+            break;
+        }
+
+        case State::FetchHourlyForecast:
+        {
+            updating = true;
+            fetchHourlyForecast();
             break;
         }
 
@@ -266,6 +274,16 @@ const String&
 WeatherService::getLastError() const
 {
     return lastError;
+}
+
+double WeatherService::getLatitude() const
+{
+    return latitude;
+}
+
+double WeatherService::getLongitude() const
+{
+    return longitude;
 }
 
 String WeatherService::getTemperature() const
@@ -432,6 +450,9 @@ void WeatherService::resolvePoint()
     const char* forecastEndpoint =
         document["properties"]["forecast"] | "";
 
+    const char* hourlyForecastEndpoint =
+        document["properties"]["forecastHourly"] | "";
+
     if (stationEndpoint[0] == '\0')
     {
         setError(
@@ -447,6 +468,9 @@ void WeatherService::resolvePoint()
 
     forecastUrl =
         String(forecastEndpoint);
+
+    hourlyForecastUrl =
+        String(hourlyForecastEndpoint);
 
     lastError = "";
     state = State::ResolveStation;
@@ -829,6 +853,16 @@ void WeatherService::fetchForecast()
     }
 
     ForecastData newForecast;
+    const bool startsAtNight = !(periods[0]["isDaytime"] | false);
+
+    // NWS removes today's daytime period when the feed advances to Tonight.
+    // Retain the high already observed earlier in this running session rather
+    // than replacing it with tomorrow's high or showing a blank value.
+    if (startsAtNight && forecast.hasHigh)
+    {
+        newForecast.highF = forecast.highF;
+        newForecast.hasHigh = true;
+    }
 
     for (JsonObjectConst period : periods)
     {
@@ -837,7 +871,7 @@ void WeatherService::fetchForecast()
         const int temperature =
             period["temperature"] | 0;
 
-        if (daytime && !newForecast.hasHigh)
+        if (daytime && !startsAtNight && !newForecast.hasHigh)
         {
             newForecast.highF = temperature;
             newForecast.hasHigh = true;
@@ -880,6 +914,100 @@ void WeatherService::fetchForecast()
     forecast = newForecast;
 
     lastError = "";
+    state = State::FetchHourlyForecast;
+}
+
+void WeatherService::fetchHourlyForecast()
+{
+    forecast.hourlyValid = false;
+    forecast.hourlyPeriodCount = 0;
+
+    // Hourly data enhances the detail screen but is not required for the
+    // current conditions. Its failure must not invalidate otherwise useful
+    // weather data.
+    if (hourlyForecastUrl.isEmpty())
+    {
+        Serial.println("[WeatherService] NWS hourly forecast URL unavailable");
+        state = State::FetchAlerts;
+        return;
+    }
+
+    HTTPClient http;
+    // The NWS hourly document is large. HTTP/1.0 plus filtered streaming avoids
+    // buffering the entire response and preserves internal heap for LVGL.
+    http.useHTTP10(true);
+    http.setConnectTimeout(REQUEST_TIMEOUT_MS);
+    http.setTimeout(REQUEST_TIMEOUT_MS);
+    if (!http.begin(hourlyForecastUrl))
+    {
+        Serial.println("[WeatherService] Unable to initialize hourly forecast request");
+        state = State::FetchAlerts;
+        return;
+    }
+    http.addHeader("User-Agent", NWS_USER_AGENT);
+    http.addHeader("Accept", NWS_ACCEPT_TYPE);
+
+    Serial.print("[WeatherService] GET ");
+    Serial.println(hourlyForecastUrl);
+    const int responseCode = http.GET();
+    if (responseCode < 200 || responseCode >= 300)
+    {
+        Serial.print("[WeatherService] Hourly forecast HTTP ");
+        Serial.println(responseCode);
+        http.end();
+        state = State::FetchAlerts;
+        return;
+    }
+
+    JsonDocument filter;
+    JsonArray periodsFilter =
+        filter["properties"]["periods"].to<JsonArray>();
+    JsonObject periodFilter = periodsFilter.add<JsonObject>();
+    periodFilter["startTime"] = true;
+    periodFilter["temperature"] = true;
+    periodFilter["shortForecast"] = true;
+    periodFilter["probabilityOfPrecipitation"]["value"] = true;
+    periodFilter["windSpeed"] = true;
+    periodFilter["windDirection"] = true;
+
+    JsonDocument document;
+    const DeserializationError error = deserializeJson(
+        document,
+        http.getStream(),
+        DeserializationOption::Filter(filter));
+    http.end();
+    if (error)
+    {
+        Serial.print("[WeatherService] Hourly forecast JSON error: ");
+        Serial.println(error.c_str());
+        state = State::FetchAlerts;
+        return;
+    }
+
+    JsonArrayConst periods =
+        document["properties"]["periods"].as<JsonArrayConst>();
+    for (JsonObjectConst period : periods)
+    {
+        if (forecast.hourlyPeriodCount >= ForecastData::MAX_HOURLY_PERIODS)
+            break;
+
+        HourlyForecastPeriod& destination =
+            forecast.hourlyPeriods[forecast.hourlyPeriodCount++];
+        destination.startTime = String(period["startTime"] | "");
+        destination.temperatureF = period["temperature"] | 0;
+        destination.shortForecast = String(period["shortForecast"] | "--");
+        destination.windSpeed = String(period["windSpeed"] | "--");
+        destination.windDirection = String(period["windDirection"] | "--");
+        JsonVariantConst precipitation =
+            period["probabilityOfPrecipitation"]["value"];
+        destination.precipitationPercent = precipitation.isNull()
+            ? 0
+            : constrain(precipitation.as<int>(), 0, 100);
+    }
+
+    forecast.hourlyValid = forecast.hourlyPeriodCount > 0;
+    Serial.print("[WeatherService] Hourly periods: ");
+    Serial.println(forecast.hourlyPeriodCount);
     state = State::FetchAlerts;
 }
 
@@ -1014,6 +1142,41 @@ void WeatherService::fetchAirQuality()
                 }
 
                 Serial.println("[WeatherService] Missing observations supplemented by Open-Meteo");
+            }
+        }
+    }
+
+    // A standard NWS forecast that begins with "Tonight" no longer contains
+    // today's daytime high. On a cold boot there is no earlier value in RAM to
+    // retain, so obtain only that missing daily maximum from Open-Meteo. The
+    // automatic timezone ensures index zero represents the location's local
+    // calendar day rather than UTC.
+    if (!forecast.hasHigh)
+    {
+        const String dailyUrl =
+            String("https://api.open-meteo.com/v1/forecast?latitude=") +
+            String(latitude, 4) + "&longitude=" + String(longitude, 4) +
+            "&daily=temperature_2m_max&temperature_unit=fahrenheit"
+            "&timezone=auto&forecast_days=1";
+
+        String dailyResponse;
+        if (performRequest(dailyUrl, dailyResponse))
+        {
+            JsonDocument dailyDocument;
+            const DeserializationError dailyError =
+                deserializeJson(dailyDocument, dailyResponse);
+            JsonArrayConst dailyHighs =
+                dailyDocument["daily"]["temperature_2m_max"]
+                    .as<JsonArrayConst>();
+            if (!dailyError && !dailyHighs.isNull() &&
+                dailyHighs.size() > 0 && !dailyHighs[0].isNull())
+            {
+                forecast.highF = static_cast<int16_t>(
+                    roundf(dailyHighs[0].as<float>()));
+                forecast.hasHigh = true;
+                Serial.print("[WeatherService] Today's high supplemented by Open-Meteo: ");
+                Serial.print(forecast.highF);
+                Serial.println(" F");
             }
         }
     }

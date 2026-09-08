@@ -19,6 +19,8 @@ public:
     const WeatherData& getCurrentWeather() const;
     const ForecastData& getForecast() const;
     const String& getLastError() const;
+    double getLatitude() const;
+    double getLongitude() const;
 
     String getTemperature() const;
     String getHumidity() const;
@@ -37,6 +39,7 @@ private:
         ResolveStation,
         FetchObservation,
         FetchForecast,
+        FetchHourlyForecast,
         FetchAlerts,
         FetchAirQuality,
         Ready,
@@ -53,6 +56,7 @@ private:
     void resolveStation();
     void fetchObservation();
     void fetchForecast();
+    void fetchHourlyForecast();
     void fetchAlerts();
     void fetchAirQuality();
 
@@ -100,6 +104,7 @@ private:
     String stationsUrl;
     String latestObservationUrl;
     String forecastUrl;
+    String hourlyForecastUrl;
     String alertsUrl;
     String lastError;
 

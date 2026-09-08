@@ -95,6 +95,7 @@ void SatellitePanel::update()
             activeText += " +" + String(visible - 1) + " MORE";
         }
         activeText += visible == 1 ? "\nIN PASS" : "\n" + String(visible) + " IN PASS";
+        if (service->isUsingCachedData()) activeText += "  |  CACHED";
 
         lv_label_set_text(nameLabel, activeText.c_str());
         lv_label_set_text(countdownLabel, String(visible).c_str());
@@ -111,7 +112,9 @@ void SatellitePanel::update()
         return;
     }
 
-    String passText = pass->name + "\nNext " + formatTime(pass->aosTime);
+    String passText = pass->name + "\n";
+    if (service->isUsingCachedData()) passText += "CACHED  |  ";
+    passText += "Next " + formatTime(pass->aosTime);
     lv_label_set_text(nameLabel, passText.c_str());
     lv_label_set_text(countdownLabel, String(visible).c_str());
     const uint32_t durationMinutes = (pass->losTime - pass->aosTime + 30) / 60;

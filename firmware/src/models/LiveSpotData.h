@@ -21,3 +21,16 @@ struct LiveSpot
     int snr = 0;
     uint32_t timestamp = 0;
 };
+
+struct SignalReachSpot
+{
+    String receiverCallsign;
+    String receiverLocator;
+    float latitude = 0.0f;
+    float longitude = 0.0f;
+    float distanceKm = 0.0f;
+    float bearingDegrees = 0.0f;
+    int snr = 0;
+    uint32_t timestamp = 0;
+    uint8_t bandIndex = 0;
+};

@@ -20,7 +20,7 @@ void LiveSpotsPanel::create(lv_obj_t* parent, LiveSpotsService& serviceReference
 
     constexpr int16_t cellWidth = 77;
     constexpr int16_t cellHeight = 30;
-    for (uint8_t index = 0; index < 9; ++index)
+    for (uint8_t index = 0; index < LiveSpotsService::BAND_COUNT; ++index)
     {
         bandCells[index] = Theme::createLabel(panel, "--\n--", Theme::COLOR_TEXT);
         lv_obj_set_pos(

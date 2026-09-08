@@ -255,6 +255,12 @@ void SettingsService::loadDefaults()
     currentSettings.hostname =
         DEFAULT_HOSTNAME;
 
+    currentSettings.callsignLookupProvider = 0;
+    currentSettings.callsignLookupUsername = "";
+    currentSettings.callsignLookupPassword = "";
+    currentSettings.wsjtxMulticastAddress = "239.255.0.0";
+    currentSettings.wsjtxUdpPort = 2237;
+
 
     // --------------------------------------------------------
     // Display
@@ -369,6 +375,21 @@ void SettingsService::loadFromStorage()
         preferences.getString(
             "hostname",
             currentSettings.hostname);
+
+    currentSettings.callsignLookupProvider =
+        preferences.getUChar("cbprovider", currentSettings.callsignLookupProvider);
+    if (currentSettings.callsignLookupProvider > 1)
+        currentSettings.callsignLookupProvider = 0;
+    currentSettings.callsignLookupUsername =
+        preferences.getString("cbuser", currentSettings.callsignLookupUsername);
+    currentSettings.callsignLookupPassword =
+        preferences.getString("cbpass", currentSettings.callsignLookupPassword);
+    currentSettings.wsjtxMulticastAddress =
+        preferences.getString("udpgroup", currentSettings.wsjtxMulticastAddress);
+    currentSettings.wsjtxUdpPort =
+        preferences.getUShort("udpport", currentSettings.wsjtxUdpPort);
+    if (currentSettings.wsjtxUdpPort == 0)
+        currentSettings.wsjtxUdpPort = 2237;
 
     pendingWiFiSettings = preferences.getBool("wifipending", false);
     wifiCandidateFailed = preferences.getBool("wififailed", false);
@@ -488,6 +509,26 @@ void SettingsService::saveToStorage()
     preferences.putString(
         "hostname",
         currentSettings.hostname);
+
+    preferences.putUChar(
+        "cbprovider",
+        currentSettings.callsignLookupProvider);
+
+    preferences.putString(
+        "cbuser",
+        currentSettings.callsignLookupUsername);
+
+    preferences.putString(
+        "cbpass",
+        currentSettings.callsignLookupPassword);
+
+    preferences.putString(
+        "udpgroup",
+        currentSettings.wsjtxMulticastAddress);
+
+    preferences.putUShort(
+        "udpport",
+        currentSettings.wsjtxUdpPort);
 
 
     // --------------------------------------------------------

@@ -48,6 +48,7 @@ private:
     lv_obj_t* detailScreen = nullptr;
     lv_obj_t* detailIdentityLabel = nullptr;
     lv_obj_t* detailFlightLabel = nullptr;
+    lv_obj_t* detailRouteLabel = nullptr;
     lv_obj_t* detailPositionLabel = nullptr;
     lv_obj_t* detailArtworkImage = nullptr;
     lv_obj_t* detailArtworkStatusLabel = nullptr;

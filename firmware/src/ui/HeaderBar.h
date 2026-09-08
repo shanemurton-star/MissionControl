@@ -25,6 +25,7 @@ public:
 
     void update();
     void useLocationIdentity(bool enabled = true);
+    void setSecondaryIdentity(const String& text);
     void setSettingsCallback(SettingsCallback callback);
     void setNavigationCallback(NavigationCallback callback);
 
@@ -46,6 +47,7 @@ private:
     lv_obj_t* container = nullptr;
 
     lv_obj_t* identityLabel = nullptr;
+    lv_obj_t* secondaryIdentityLabel = nullptr;
     lv_obj_t* wifiStatusLabel = nullptr;
     lv_obj_t* localTimeLabel = nullptr;
     lv_obj_t* localSuffixLabel = nullptr;
@@ -59,4 +61,5 @@ private:
     SettingsCallback settingsCallback;
     NavigationCallback navigationCallback;
     bool locationIdentity = false;
+    String secondaryIdentity;
 };

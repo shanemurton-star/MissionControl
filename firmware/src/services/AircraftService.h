@@ -22,6 +22,16 @@ public:
     const String& getLastError() const;
     double getCenterLatitude() const;
     double getCenterLongitude() const;
+    void requestRouteData(const String& callsign);
+    bool isRouteLookupPending() const;
+    bool hasRouteResultFor(const String& callsign) const;
+    bool isRouteAvailable() const;
+    const String& getRouteAirline() const;
+    const String& getRouteOriginCode() const;
+    const String& getRouteOriginCity() const;
+    const String& getRouteDestinationCode() const;
+    const String& getRouteDestinationCity() const;
+    const String& getRouteError() const;
 
 private:
     static constexpr unsigned long REFRESH_INTERVAL_MS = 3UL * 60UL * 1000UL;
@@ -33,6 +43,7 @@ private:
         const String& url,
         const char* sourceName,
         uint8_t& reportedAircraft);
+    void fetchRouteData();
     void calculatePosition(AircraftData& aircraft) const;
     void sortByDistance();
     static bool timeReached(unsigned long targetTime);
@@ -48,4 +59,15 @@ private:
     String requestUrl;
     String fallbackUrl;
     String lastError;
+    String pendingRouteCallsign;
+    String routeCallsign;
+    String routeAirline;
+    String routeOriginCode;
+    String routeOriginCity;
+    String routeDestinationCode;
+    String routeDestinationCity;
+    String routeError;
+    bool routeLookupPending = false;
+    bool routeLookupComplete = false;
+    bool routeAvailable = false;
 };

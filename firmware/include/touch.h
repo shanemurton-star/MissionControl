@@ -69,6 +69,15 @@ TAMC_GT911 ts(
     max(TOUCH_MAP_X1, TOUCH_MAP_X2),
     max(TOUCH_MAP_Y1, TOUCH_MAP_Y2));
 
+uint8_t touch_gt911_address = GT911_ADDR1;
+bool touch_gt911_online = false;
+
+bool touch_gt911_probe(uint8_t address)
+{
+    Wire.beginTransmission(address);
+    return Wire.endTransmission() == 0;
+}
+
 #elif defined(TOUCH_XPT2046)
 
 #include <SPI.h>
@@ -166,12 +175,33 @@ void touch_init()
 
 #elif defined(TOUCH_GT911)
 
-    /*
-     * DisplayService initializes the shared I2C bus before calling this
-     * function. Do not call Wire.begin() a second time here.
-     */
-    ts.begin();
+    // A firmware upload resets the ESP32 without necessarily power-cycling the
+    // external GT911. Restart the I2C controller cleanly so a stale bus state
+    // cannot leave an otherwise running UI without touch input.
+    Wire.end();
+    delay(5);
+    ts.begin(GT911_ADDR1);
+    Wire.setTimeOut(20);
+    touch_gt911_address = GT911_ADDR1;
+    touch_gt911_online = touch_gt911_probe(touch_gt911_address);
+    if (!touch_gt911_online)
+    {
+        ts.begin(GT911_ADDR2);
+        Wire.setTimeOut(20);
+        touch_gt911_address = GT911_ADDR2;
+        touch_gt911_online = touch_gt911_probe(touch_gt911_address);
+    }
     ts.setRotation(TOUCH_GT911_ROTATION);
+    Serial.print("[Touch] GT911 ");
+    if (touch_gt911_online)
+    {
+        Serial.print("online at 0x");
+        Serial.println(touch_gt911_address, HEX);
+    }
+    else
+    {
+        Serial.println("not responding on I2C");
+    }
 
 #elif defined(TOUCH_XPT2046)
 
@@ -196,7 +226,7 @@ bool touch_has_signal()
 
 #elif defined(TOUCH_GT911)
 
-    return true;
+    return touch_gt911_online;
 
 #elif defined(TOUCH_XPT2046)
 

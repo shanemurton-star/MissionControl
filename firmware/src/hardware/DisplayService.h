@@ -12,6 +12,7 @@
 #include "../services/SettingsService.h"
 #include "../services/WiFiService.h"
 #include "../services/PotaService.h"
+#include "../services/WsjtxService.h"
 
 class DisplayService
 {
@@ -24,6 +25,7 @@ public:
         SolarService& solarService,
         LiveSpotsService& liveSpotsService,
         PotaService& potaService,
+        WsjtxService& wsjtxService,
         SettingsService& settingsService,
         WiFiService& wifiService);
 

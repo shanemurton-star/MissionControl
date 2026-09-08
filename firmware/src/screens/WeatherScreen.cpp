@@ -2,6 +2,7 @@
 #include "../services/NetworkUpdateState.h"
 
 #include <math.h>
+#include <time.h>
 #include "../ui/DashboardIcons.h"
 #include "../ui/Theme.h"
 
@@ -15,6 +16,111 @@ namespace
         int16_t lowF = 0;
         String condition;
     };
+
+    double normalizeDegrees(double value)
+    {
+        while (value < 0.0) value += 360.0;
+        while (value >= 360.0) value -= 360.0;
+        return value;
+    }
+
+    bool solarUtcHour(
+        int dayOfYear,
+        double latitude,
+        double longitude,
+        bool sunrise,
+        double& utcHour)
+    {
+        constexpr double ZENITH = 90.833;
+        const double longitudeHour = longitude / 15.0;
+        const double approximateTime = dayOfYear +
+            ((sunrise ? 6.0 : 18.0) - longitudeHour) / 24.0;
+        const double meanAnomaly = 0.9856 * approximateTime - 3.289;
+        double trueLongitude = meanAnomaly +
+            1.916 * sin(meanAnomaly * DEG_TO_RAD) +
+            0.020 * sin(2.0 * meanAnomaly * DEG_TO_RAD) + 282.634;
+        trueLongitude = normalizeDegrees(trueLongitude);
+
+        double rightAscension = atan(0.91764 *
+            tan(trueLongitude * DEG_TO_RAD)) / DEG_TO_RAD;
+        rightAscension = normalizeDegrees(rightAscension);
+        rightAscension +=
+            floor(trueLongitude / 90.0) * 90.0 -
+            floor(rightAscension / 90.0) * 90.0;
+        rightAscension /= 15.0;
+
+        const double sinDeclination =
+            0.39782 * sin(trueLongitude * DEG_TO_RAD);
+        const double cosDeclination = cos(asin(sinDeclination));
+        const double latitudeRadians = latitude * DEG_TO_RAD;
+        const double cosHour =
+            (cos(ZENITH * DEG_TO_RAD) -
+             sinDeclination * sin(latitudeRadians)) /
+            (cosDeclination * cos(latitudeRadians));
+        if (cosHour < -1.0 || cosHour > 1.0) return false;
+
+        double localHourAngle = acos(cosHour) / DEG_TO_RAD;
+        if (sunrise) localHourAngle = 360.0 - localHourAngle;
+        localHourAngle /= 15.0;
+
+        const double localMeanTime = localHourAngle + rightAscension -
+            0.06571 * approximateTime - 6.622;
+        utcHour = localMeanTime - longitudeHour;
+        return true;
+    }
+
+    String formatSolarTime(double utcHour, time_t now)
+    {
+        struct tm localInfo;
+        struct tm utcInfo;
+        localtime_r(&now, &localInfo);
+        gmtime_r(&now, &utcInfo);
+        const time_t utcInterpretedAsLocal = mktime(&utcInfo);
+        const double utcOffsetHours =
+            difftime(now, utcInterpretedAsLocal) / 3600.0;
+        double localHour = fmod(utcHour + utcOffsetHours, 24.0);
+        if (localHour < 0.0) localHour += 24.0;
+
+        int totalMinutes = static_cast<int>(round(localHour * 60.0)) % 1440;
+        int hour = totalMinutes / 60;
+        const int minute = totalMinutes % 60;
+        const bool afternoon = hour >= 12;
+        int displayHour = hour % 12;
+        if (displayHour == 0) displayHour = 12;
+        char buffer[12];
+        snprintf(
+            buffer, sizeof(buffer), "%d:%02d %s",
+            displayHour, minute, afternoon ? "PM" : "AM");
+        return String(buffer);
+    }
+
+    String moonPhaseName(time_t now)
+    {
+        // 2000-01-06 18:14 UTC was a well-established astronomical new moon.
+        constexpr double NEW_MOON_EPOCH = 947182440.0;
+        constexpr double SYNODIC_MONTH_SECONDS = 29.53058867 * 86400.0;
+        double cycle = fmod(
+            difftime(now, static_cast<time_t>(NEW_MOON_EPOCH)),
+            SYNODIC_MONTH_SECONDS);
+        if (cycle < 0.0) cycle += SYNODIC_MONTH_SECONDS;
+        const uint8_t phase = static_cast<uint8_t>(
+            floor(cycle / SYNODIC_MONTH_SECONDS * 8.0 + 0.5)) % 8;
+        const char* names[8] = {
+            "NEW MOON", "WAXING CRESCENT", "FIRST QUARTER",
+            "WAXING GIBBOUS", "FULL MOON", "WANING GIBBOUS",
+            "LAST QUARTER", "WANING CRESCENT"};
+        return String(names[phase]);
+    }
+
+    String formatHourlyTime(const String& startTime)
+    {
+        if (startTime.length() < 13) return "--";
+        int hour = startTime.substring(11, 13).toInt();
+        const bool afternoon = hour >= 12;
+        hour %= 12;
+        if (hour == 0) hour = 12;
+        return String(hour) + (afternoon ? " PM" : " AM");
+    }
 
     lv_obj_t* createInstrumentArc(
         lv_obj_t* parent,
@@ -108,6 +214,20 @@ namespace
                 if (summary.condition.isEmpty())
                     summary.condition = period.shortForecast;
             }
+        }
+
+        // Once the NWS feed rolls over to "Tonight", it no longer includes
+        // today's daytime period. Preserve the known high retained by the
+        // service so navigating or refreshing after sunset does not blank it.
+        if (!summaries[0].hasHigh && forecast.hasHigh)
+        {
+            summaries[0].highF = forecast.highF;
+            summaries[0].hasHigh = true;
+        }
+        if (!summaries[0].hasLow && forecast.hasLow)
+        {
+            summaries[0].lowF = forecast.lowF;
+            summaries[0].hasLow = true;
         }
     }
 }
@@ -268,7 +388,7 @@ void WeatherScreen::begin(
             summaryPanel, "UPDATING", Theme::COLOR_TEXT_MUTED);
         lv_obj_set_pos(dailyConditionLabels[index], conditionX + 69, 20);
         lv_obj_set_width(dailyConditionLabels[index], dayWidth - valuesWidth - 83);
-        lv_obj_set_height(dailyConditionLabels[index], 52);
+        lv_obj_set_height(dailyConditionLabels[index], 56);
         lv_obj_set_style_text_align(
             dailyConditionLabels[index], LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
         lv_label_set_long_mode(dailyConditionLabels[index], LV_LABEL_LONG_WRAP);
@@ -279,6 +399,28 @@ void WeatherScreen::begin(
     lv_obj_set_width(alertLabel, 326);
     lv_obj_set_style_text_align(alertLabel, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
 
+    // A transparent touch target preserves the clean forecast layout while
+    // making the entire Today half easy to open on a physical touchscreen.
+    hourlyForecastTarget = lv_btn_create(summaryPanel);
+    lv_obj_set_pos(hourlyForecastTarget, 0, 0);
+    lv_obj_set_size(hourlyForecastTarget, dayWidth - 5, 75);
+    lv_obj_set_style_bg_opa(
+        hourlyForecastTarget, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(
+        hourlyForecastTarget, Theme::color(Theme::COLOR_PRIMARY),
+        LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(
+        hourlyForecastTarget, LV_OPA_20,
+        LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_border_width(hourlyForecastTarget, 0, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(hourlyForecastTarget, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(hourlyForecastTarget, 0, LV_PART_MAIN);
+    lv_obj_add_event_cb(
+        hourlyForecastTarget,
+        hourlyForecastEventHandler,
+        LV_EVENT_CLICKED,
+        this);
+
     update();
 
     updateTimer = lv_timer_create(
@@ -286,6 +428,228 @@ void WeatherScreen::begin(
         1000,
         this);
 
+}
+
+void WeatherScreen::createHourlyScreen()
+{
+    if (hourlyScreen != nullptr || clockService == nullptr) return;
+
+    hourlyScreen = lv_obj_create(nullptr);
+    Theme::configureScreen(hourlyScreen);
+    hourlyHeaderBar.create(
+        hourlyScreen, *clockService, Theme::SCREEN_WIDTH, Theme::HEADER_HEIGHT);
+    hourlyHeaderBar.useLocationIdentity();
+    hourlyHeaderBar.setSettingsCallback([this]() {
+        if (navigationCallback != nullptr) navigationCallback(Page::Settings);
+    });
+    hourlyHeaderBar.setNavigationCallback([this](Page page) {
+        if (navigationCallback != nullptr) navigationCallback(page);
+    });
+
+    lv_obj_t* backButton = lv_btn_create(hourlyScreen);
+    lv_obj_set_pos(backButton, 8, Theme::CONTENT_TOP);
+    lv_obj_set_size(backButton, 116, 30);
+    lv_obj_set_style_bg_color(
+        backButton, Theme::color(Theme::COLOR_PANEL), LV_PART_MAIN);
+    lv_obj_set_style_border_color(
+        backButton, Theme::color(Theme::COLOR_PANEL_BORDER), LV_PART_MAIN);
+    lv_obj_set_style_border_width(backButton, 1, LV_PART_MAIN);
+    lv_obj_set_style_radius(backButton, 8, LV_PART_MAIN);
+    lv_obj_add_event_cb(
+        backButton, hourlyBackEventHandler, LV_EVENT_CLICKED, this);
+    lv_obj_center(Theme::createLabel(
+        backButton, LV_SYMBOL_LEFT " WEATHER", Theme::COLOR_PRIMARY));
+
+    lv_obj_t* title = Theme::createLabel(
+        hourlyScreen, "NEXT 12 HOURS", Theme::COLOR_PRIMARY);
+    lv_obj_align(title, LV_ALIGN_TOP_LEFT, 144, Theme::CONTENT_TOP + 8);
+
+    hourlyScroller = lv_obj_create(hourlyScreen);
+    lv_obj_set_pos(hourlyScroller, 8, 110);
+    lv_obj_set_size(hourlyScroller, 784, 328);
+    lv_obj_set_style_bg_opa(hourlyScroller, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(hourlyScroller, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(hourlyScroller, 0, LV_PART_MAIN);
+    lv_obj_set_scroll_dir(hourlyScroller, LV_DIR_HOR);
+    lv_obj_set_scrollbar_mode(hourlyScroller, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_set_scroll_snap_x(hourlyScroller, LV_SCROLL_SNAP_START);
+
+    constexpr int16_t CARD_WIDTH = 124;
+    constexpr int16_t CARD_GAP = 7;
+    for (uint8_t index = 0;
+         index < ForecastData::MAX_HOURLY_PERIODS;
+         ++index)
+    {
+        lv_obj_t* card = Theme::createPanel(
+            hourlyScroller,
+            index * (CARD_WIDTH + CARD_GAP),
+            0,
+            CARD_WIDTH,
+            302,
+            "");
+        hourlyCards[index] = card;
+
+        hourlyTimeLabels[index] = Theme::createLabel(
+            card, "--", Theme::COLOR_PRIMARY, &lv_font_montserrat_20);
+        lv_obj_set_pos(hourlyTimeLabels[index], 0, 2);
+        lv_obj_set_width(hourlyTimeLabels[index], 102);
+        lv_obj_set_style_text_align(
+            hourlyTimeLabels[index], LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+
+        hourlyIcons[index] = DashboardIcons::create(
+            card, DashboardIcons::Type::Weather, 29, 43, 0xFFFFFF);
+        lv_img_set_zoom(hourlyIcons[index], 224);
+
+        hourlyTemperatureLabels[index] = Theme::createLabel(
+            card, "-- F", Theme::COLOR_TEXT, &lv_font_montserrat_28);
+        lv_obj_set_pos(hourlyTemperatureLabels[index], 0, 105);
+        lv_obj_set_width(hourlyTemperatureLabels[index], 102);
+        lv_obj_set_style_text_align(
+            hourlyTemperatureLabels[index], LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+
+        hourlyConditionLabels[index] = Theme::createLabel(
+            card, "UPDATING", Theme::COLOR_TEXT_MUTED);
+        lv_obj_set_pos(hourlyConditionLabels[index], 0, 145);
+        lv_obj_set_size(hourlyConditionLabels[index], 102, 62);
+        lv_obj_set_style_text_align(
+            hourlyConditionLabels[index], LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+        lv_label_set_long_mode(
+            hourlyConditionLabels[index], LV_LABEL_LONG_WRAP);
+
+        hourlyPrecipitationLabels[index] = Theme::createLabel(
+            card, "PRECIP --%", Theme::COLOR_PRIMARY);
+        lv_obj_set_pos(hourlyPrecipitationLabels[index], 0, 219);
+        lv_obj_set_width(hourlyPrecipitationLabels[index], 102);
+        lv_obj_set_style_text_align(
+            hourlyPrecipitationLabels[index], LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+
+        hourlyWindLabels[index] = Theme::createLabel(
+            card, "WIND --", Theme::COLOR_TEXT_DIM);
+        lv_obj_set_pos(hourlyWindLabels[index], 0, 249);
+        lv_obj_set_size(hourlyWindLabels[index], 102, 40);
+        lv_obj_set_style_text_align(
+            hourlyWindLabels[index], LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+        lv_label_set_long_mode(hourlyWindLabels[index], LV_LABEL_LONG_WRAP);
+    }
+
+    hourlyStatusLabel = Theme::createLabel(
+        hourlyScreen, "HOURLY FORECAST UPDATING", Theme::COLOR_WARNING);
+    lv_obj_align(hourlyStatusLabel, LV_ALIGN_CENTER, 0, 20);
+    lv_obj_add_flag(hourlyStatusLabel, LV_OBJ_FLAG_HIDDEN);
+}
+
+void WeatherScreen::showHourlyScreen()
+{
+    createHourlyScreen();
+    if (hourlyScreen == nullptr) return;
+    updateHourlyForecast();
+    lv_scr_load(hourlyScreen);
+}
+
+void WeatherScreen::updateHourlyForecast()
+{
+    if (hourlyScreen == nullptr || weatherService == nullptr) return;
+    const uint32_t revision = weatherService->getDataRevision();
+    if (revision == renderedHourlyRevision) return;
+    renderedHourlyRevision = revision;
+
+    const ForecastData& forecast = weatherService->getForecast();
+    if (!forecast.hourlyValid || forecast.hourlyPeriodCount == 0)
+    {
+        lv_obj_add_flag(hourlyScroller, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(hourlyStatusLabel, LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text(
+            hourlyStatusLabel,
+            weatherService->isUpdating()
+                ? "HOURLY FORECAST UPDATING"
+                : "HOURLY FORECAST UNAVAILABLE");
+        return;
+    }
+
+    lv_obj_add_flag(hourlyStatusLabel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(hourlyScroller, LV_OBJ_FLAG_HIDDEN);
+    for (uint8_t index = 0;
+         index < ForecastData::MAX_HOURLY_PERIODS;
+         ++index)
+    {
+        if (index >= forecast.hourlyPeriodCount)
+        {
+            lv_obj_add_flag(hourlyCards[index], LV_OBJ_FLAG_HIDDEN);
+            continue;
+        }
+
+        const HourlyForecastPeriod& period = forecast.hourlyPeriods[index];
+        lv_obj_clear_flag(hourlyCards[index], LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text(
+            hourlyTimeLabels[index], formatHourlyTime(period.startTime).c_str());
+        lv_label_set_text(
+            hourlyTemperatureLabels[index],
+            (String(period.temperatureF) + " F").c_str());
+        lv_label_set_text(
+            hourlyConditionLabels[index], period.shortForecast.c_str());
+        DashboardIcons::setWeatherCondition(
+            hourlyIcons[index], period.shortForecast);
+        lv_label_set_text(
+            hourlyPrecipitationLabels[index],
+            (String("PRECIP ") + period.precipitationPercent + "%").c_str());
+        lv_label_set_text(
+            hourlyWindLabels[index],
+            (period.windDirection + "  " + period.windSpeed).c_str());
+    }
+}
+
+void WeatherScreen::updateAstronomy()
+{
+    if (clockService == nullptr || weatherService == nullptr) return;
+    const time_t now = time(nullptr);
+    if (now < 1704067200) return;
+
+    struct tm localInfo;
+    localtime_r(&now, &localInfo);
+    // Include DST state so a display left running through the seasonal clock
+    // change recalculates the local rise/set times immediately.
+    const String dateKey = String(localInfo.tm_year) + ":" +
+        localInfo.tm_yday + ":" + localInfo.tm_isdst;
+    if (dateKey == renderedAstronomyDate) return;
+
+    double sunriseUtc = 0.0;
+    double sunsetUtc = 0.0;
+    const bool hasSunrise = solarUtcHour(
+        localInfo.tm_yday + 1,
+        weatherService->getLatitude(),
+        weatherService->getLongitude(),
+        true,
+        sunriseUtc);
+    const bool hasSunset = solarUtcHour(
+        localInfo.tm_yday + 1,
+        weatherService->getLatitude(),
+        weatherService->getLongitude(),
+        false,
+        sunsetUtc);
+
+    String astronomy = String("SUNRISE  ") +
+        (hasSunrise ? formatSolarTime(sunriseUtc, now) : "--") +
+        "    SUNSET  " +
+        (hasSunset ? formatSolarTime(sunsetUtc, now) : "--") +
+        "    MOON  " + moonPhaseName(now);
+    headerBar.setSecondaryIdentity(astronomy);
+    renderedAstronomyDate = dateKey;
+}
+
+void WeatherScreen::hourlyForecastEventHandler(lv_event_t* event)
+{
+    WeatherScreen* self = static_cast<WeatherScreen*>(
+        lv_event_get_user_data(event));
+    if (self != nullptr) self->showHourlyScreen();
+}
+
+void WeatherScreen::hourlyBackEventHandler(lv_event_t* event)
+{
+    WeatherScreen* self = static_cast<WeatherScreen*>(
+        lv_event_get_user_data(event));
+    if (self == nullptr || self->screen == nullptr) return;
+    lv_scr_load(self->screen);
+    self->update();
 }
 
 void WeatherScreen::show()
@@ -302,6 +666,7 @@ void WeatherScreen::show()
 void WeatherScreen::release()
 {
     if (updateTimer != nullptr) { lv_timer_del(updateTimer); updateTimer = nullptr; }
+    if (hourlyScreen != nullptr) { lv_obj_del(hourlyScreen); hourlyScreen = nullptr; }
     if (screen != nullptr) { lv_obj_del(screen); screen = nullptr; }
     temperatureArc = windArc = humidityArc = airQualityArc = nullptr;
     weatherIcon = temperatureLabel = conditionLabel = highLowLabel = nullptr;
@@ -315,10 +680,18 @@ void WeatherScreen::release()
         dailyForecastIcons[i] = nullptr;
         dailyConditionLabels[i] = nullptr;
     }
-    alertLabel = nullptr;
+    alertLabel = hourlyForecastTarget = hourlyScroller = hourlyStatusLabel = nullptr;
+    for (uint8_t i = 0; i < ForecastData::MAX_HOURLY_PERIODS; ++i)
+    {
+        hourlyCards[i] = hourlyTimeLabels[i] = hourlyIcons[i] = nullptr;
+        hourlyTemperatureLabels[i] = hourlyConditionLabels[i] = nullptr;
+        hourlyPrecipitationLabels[i] = hourlyWindLabels[i] = nullptr;
+    }
     renderedWeatherRevision = UINT32_MAX;
+    renderedHourlyRevision = UINT32_MAX;
     renderedWeatherValid = false;
     renderedWeatherUpdating = false;
+    renderedAstronomyDate = "";
 }
 
 void WeatherScreen::setNavigationCallback(
@@ -334,6 +707,9 @@ void WeatherScreen::update()
     // labels, arcs, styles, and PNG sources every second caused broad LVGL
     // invalidation and the visible shimmer on this screen.
     headerBar.update();
+    if (hourlyScreen != nullptr && lv_scr_act() == hourlyScreen)
+        hourlyHeaderBar.update();
+    updateAstronomy();
     if (NetworkUpdateState::isBusy()) return;
     if (weatherService == nullptr || temperatureLabel == nullptr) return;
 
@@ -356,6 +732,7 @@ void WeatherScreen::update()
         lv_label_set_text(temperatureLabel, "-- F");
         lv_label_set_text(conditionLabel,
             weatherUpdating ? "UPDATING WEATHER" : "WEATHER UNAVAILABLE");
+        updateHourlyForecast();
         return;
     }
 
@@ -430,6 +807,12 @@ void WeatherScreen::update()
         const String condition = summary.condition.isEmpty()
             ? String("UNAVAILABLE")
             : summary.condition;
+        lv_obj_set_style_text_font(
+            dailyConditionLabels[index],
+            condition.length() > 36
+                ? &lv_font_montserrat_12
+                : &lv_font_montserrat_14,
+            LV_PART_MAIN);
         lv_label_set_text(dailyConditionLabels[index], condition.c_str());
         DashboardIcons::setWeatherCondition(dailyForecastIcons[index], condition);
     }
@@ -439,6 +822,7 @@ void WeatherScreen::update()
         : String("ALERT: ") + forecast.primaryAlert;
     if (alertText.length() > 31) alertText = alertText.substring(0, 28) + "...";
     lv_label_set_text(alertLabel, alertText.c_str());
+    updateHourlyForecast();
 }
 
 void WeatherScreen::updateTimerCallback(

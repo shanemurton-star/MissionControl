@@ -102,12 +102,19 @@ void SatelliteScreen::begin(ClockService& clockService, SatelliteService& servic
 
     for (uint8_t i = 0; i < SatelliteService::SATELLITE_COUNT; ++i)
     {
-        targets[i] = lv_obj_create(sky);
-        lv_obj_set_size(targets[i], 9, 9);
-        lv_obj_set_style_radius(targets[i], LV_RADIUS_CIRCLE, LV_PART_MAIN);
-        lv_obj_set_style_bg_color(targets[i], Theme::color(Theme::COLOR_SUCCESS), LV_PART_MAIN);
-        lv_obj_set_style_border_width(targets[i], 0, LV_PART_MAIN);
-        lv_obj_clear_flag(targets[i], LV_OBJ_FLAG_SCROLLABLE);
+        targets[i] = lv_line_create(sky);
+        lv_obj_set_size(targets[i], 15, 15);
+        targetArrowPoints[i][0] = {7, 1};
+        targetArrowPoints[i][1] = {2, 13};
+        targetArrowPoints[i][2] = {7, 10};
+        targetArrowPoints[i][3] = {12, 13};
+        targetArrowPoints[i][4] = {7, 1};
+        lv_line_set_points(targets[i], targetArrowPoints[i], 5);
+        lv_obj_set_style_line_color(
+            targets[i], Theme::color(Theme::COLOR_SUCCESS), LV_PART_MAIN);
+        lv_obj_set_style_line_width(targets[i], 2, LV_PART_MAIN);
+        lv_obj_set_style_line_rounded(targets[i], true, LV_PART_MAIN);
+        lv_obj_clear_flag(targets[i], LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(targets[i], LV_OBJ_FLAG_HIDDEN);
         targetLabels[i] = Theme::createLabel(sky, "", Theme::COLOR_SUCCESS);
         lv_obj_add_flag(targetLabels[i], LV_OBJ_FLAG_HIDDEN);
@@ -271,9 +278,11 @@ void SatelliteScreen::update()
     lv_obj_add_flag(statusLabel, LV_OBJ_FLAG_HIDDEN);
 
     uint8_t order[SatelliteService::SATELLITE_COUNT];
+    uint8_t orderedCount = 0;
     for (uint8_t i = 0; i < SatelliteService::SATELLITE_COUNT; ++i)
-        order[i] = i;
-    for (uint8_t i = 1; i < SatelliteService::SATELLITE_COUNT; ++i)
+        if (satelliteService->getSatellite(i).valid)
+            order[orderedCount++] = i;
+    for (uint8_t i = 1; i < orderedCount; ++i)
     {
         uint8_t value = order[i];
         int8_t position = i - 1;
@@ -288,6 +297,12 @@ void SatelliteScreen::update()
 
     for (uint8_t row = 0; row < SatelliteService::SATELLITE_COUNT; ++row)
     {
+        if (row >= orderedCount)
+        {
+            lv_obj_add_flag(passRowButtons[row], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(passRowSeparators[row], LV_OBJ_FLAG_HIDDEN);
+            continue;
+        }
         const uint8_t satelliteIndex = order[row];
         const SatelliteData& item = satelliteService->getSatellite(satelliteIndex);
         passRowSatelliteIndices[row] = satelliteIndex;
@@ -297,8 +312,10 @@ void SatelliteScreen::update()
             compassDirection(item.losAzimuth) + "   " LV_SYMBOL_RIGHT;
         lv_label_set_text(passRowLabels[row], text.c_str());
         lv_obj_clear_flag(passRowButtons[row], LV_OBJ_FLAG_HIDDEN);
-        if (row + 1 < SatelliteService::SATELLITE_COUNT)
+        if (row + 1 < orderedCount)
             lv_obj_clear_flag(passRowSeparators[row], LV_OBJ_FLAG_HIDDEN);
+        else
+            lv_obj_add_flag(passRowSeparators[row], LV_OBJ_FLAG_HIDDEN);
     }
     lv_obj_update_layout(passScroller);
 
@@ -315,6 +332,27 @@ void SatelliteScreen::update()
         const float radians = item.currentAzimuth * DEG_TO_RAD;
         const int16_t x = static_cast<int16_t>(sin(radians) * radius);
         const int16_t y = static_cast<int16_t>(-cos(radians) * radius) + 10;
+
+        const float futureRadius =
+            (90.0f - item.futureElevation) / 90.0f * 145.0f;
+        const float futureRadians = item.futureAzimuth * DEG_TO_RAD;
+        const float futureX = sinf(futureRadians) * futureRadius;
+        const float futureY = -cosf(futureRadians) * futureRadius + 10.0f;
+        const float motionRadians = atan2f(futureX - x, -(futureY - y));
+        constexpr float center = 7.0f;
+        constexpr int8_t basePoints[5][2] = {
+            {0, -6}, {-5, 6}, {0, 3}, {5, 6}, {0, -6}};
+        for (uint8_t point = 0; point < 5; ++point)
+        {
+            const float baseX = basePoints[point][0];
+            const float baseY = basePoints[point][1];
+            targetArrowPoints[i][point] = {
+                static_cast<lv_coord_t>(center +
+                    baseX * cosf(motionRadians) - baseY * sinf(motionRadians)),
+                static_cast<lv_coord_t>(center +
+                    baseX * sinf(motionRadians) + baseY * cosf(motionRadians))};
+        }
+        lv_line_set_points(targets[i], targetArrowPoints[i], 5);
         lv_obj_align(targets[i], LV_ALIGN_CENTER, x, y);
         lv_obj_clear_flag(targets[i], LV_OBJ_FLAG_HIDDEN);
         lv_label_set_text(targetLabels[i], item.name.c_str());

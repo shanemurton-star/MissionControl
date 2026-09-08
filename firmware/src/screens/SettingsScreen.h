@@ -8,6 +8,7 @@
 #include "../services/SettingsService.h"
 #include "../services/WiFiService.h"
 #include "../services/LiveSpotsService.h"
+#include "../services/WsjtxService.h"
 #include "../ui/HeaderBar.h"
 
 class SettingsScreen
@@ -22,7 +23,8 @@ public:
         ClockService& clockService,
         SettingsService& settingsService,
         WiFiService& wifiService,
-        LiveSpotsService& liveSpotsService);
+        LiveSpotsService& liveSpotsService,
+        WsjtxService& wsjtxService);
     void show();
     void release();
     void setNavigationCallback(NavigationCallback callback);
@@ -41,7 +43,10 @@ private:
     static void updateTimerCallback(lv_timer_t* timer);
     static void restartTimerCallback(lv_timer_t* timer);
     static void displayPageButtonEventHandler(lv_event_t* event);
+    static void lookupPageButtonEventHandler(lv_event_t* event);
     static void generalPageButtonEventHandler(lv_event_t* event);
+    static void lookupProviderButtonEventHandler(lv_event_t* event);
+    static void lookupSaveButtonEventHandler(lv_event_t* event);
     static void defaultScreenButtonEventHandler(lv_event_t* event);
     static void brightnessSliderEventHandler(lv_event_t* event);
 
@@ -54,7 +59,10 @@ private:
     void updateKeyboardKeys();
     void scanForWiFi();
     void showDisplayPage();
+    void showLookupPage();
     void showGeneralPage();
+    void saveLookupSettings();
+    void updateLookupProviderButtons();
     void selectDefaultScreen(uint8_t selection);
     void updateDefaultScreenButtons();
     void updateBrightnessLabel();
@@ -63,6 +71,7 @@ private:
     SettingsService* settingsService = nullptr;
     WiFiService* wifiService = nullptr;
     LiveSpotsService* liveSpotsService = nullptr;
+    WsjtxService* wsjtxService = nullptr;
     NavigationCallback navigationCallback;
 
     lv_obj_t* screen = nullptr;
@@ -78,8 +87,17 @@ private:
     lv_obj_t* statusLabel = nullptr;
     lv_obj_t* generalPanel = nullptr;
     lv_obj_t* displayPanel = nullptr;
+    lv_obj_t* lookupPanel = nullptr;
     lv_obj_t* displayPageButton = nullptr;
+    lv_obj_t* lookupPageButton = nullptr;
     lv_obj_t* generalPageButton = nullptr;
+    lv_obj_t* lookupGeneralPageButton = nullptr;
+    lv_obj_t* lookupProviderButtons[2] = {};
+    lv_obj_t* lookupUsernameTextArea = nullptr;
+    lv_obj_t* lookupPasswordTextArea = nullptr;
+    lv_obj_t* udpGroupTextArea = nullptr;
+    lv_obj_t* udpPortTextArea = nullptr;
+    lv_obj_t* lookupStatusLabel = nullptr;
     lv_obj_t* brightnessSlider = nullptr;
     lv_obj_t* brightnessValueLabel = nullptr;
     lv_obj_t* defaultScreenButtons[7] = {};
@@ -93,6 +111,7 @@ private:
     bool restartPending = false;
     bool uppercaseKeyboard = false;
     bool symbolKeyboard = false;
+    uint8_t selectedLookupProvider = 0;
 
     static BrightnessCallback brightnessCallback;
 };

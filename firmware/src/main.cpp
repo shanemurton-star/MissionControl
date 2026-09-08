@@ -14,6 +14,7 @@
 #include "services/SolarService.h"
 #include "services/LiveSpotsService.h"
 #include "services/PotaService.h"
+#include "services/WsjtxService.h"
 #include "services/NetworkUpdateState.h"
 
 SettingsService settingsService;
@@ -26,6 +27,7 @@ SatelliteService satelliteService;
 SolarService solarService;
 LiveSpotsService liveSpotsService;
 PotaService potaService;
+WsjtxService wsjtxService;
 
 namespace
 {
@@ -99,9 +101,10 @@ namespace
                     case 3: solarService.update(); break;
                     case 4: liveSpotsService.update(); break;
                     case 5: potaService.update(); break;
+                    case 6: wsjtxService.updateLookup(); break;
                 }
                 NetworkUpdateState::setBusy(false);
-                serviceSlot = (serviceSlot + 1) % 6;
+                serviceSlot = (serviceSlot + 1) % 7;
             }
 
             vTaskDelay(pdMS_TO_TICKS(50));
@@ -218,6 +221,7 @@ void setup()
     solarService.begin();
     liveSpotsService.begin(settingsService.get());
     potaService.begin(settingsService.get());
+    wsjtxService.begin(settingsService.get());
 
     if (wifiService.isNetworkReady() && clockService.isSynchronized())
     {
@@ -234,17 +238,10 @@ void setup()
 
         aircraftService.update();
 
-        // DNS on this display becomes unreliable after the RGB/LVGL hardware
-        // stack starts, so load every initial TLE in the proven pre-display
-        // DNS window. Radio channels are fetched only when a detail page is
-        // opened; preloading them all would double startup network traffic.
-        for (uint8_t satellite = 0;
-             satellite < SatelliteService::SATELLITE_COUNT;
-             ++satellite)
-        {
-            satelliteService.update();
-            delay(10);
-        }
+        // Activate cached passes now. Fresh TLEs are intentionally deferred
+        // and paced by SatelliteService so startup cannot exhaust HTTPS
+        // sockets or hammer both orbit providers during an outage.
+        satelliteService.update();
 
         // Load the numeric solar data now, but leave the large JPEG decoder
         // for the dedicated background worker created after display startup.
@@ -268,6 +265,7 @@ void setup()
         solarService,
         liveSpotsService,
         potaService,
+        wsjtxService,
         settingsService,
         wifiService))
     {
@@ -312,6 +310,7 @@ void loop()
     displayService.update();
     wifiService.update();
     clockService.update();
+    wsjtxService.poll();
 
     delay(5);
 }

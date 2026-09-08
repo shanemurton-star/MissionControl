@@ -8,7 +8,7 @@ class SolarService
 public:
     ~SolarService();
     void begin();
-    void update(bool allowCoronaImage = true);
+    void update(bool allowCoronaImage = false);
     bool isValid() const;
     bool isUpdating() const;
     const SolarData& getData() const;

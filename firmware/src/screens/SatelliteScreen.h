@@ -35,6 +35,7 @@ private:
     uint8_t passRowSatelliteIndices[SatelliteService::SATELLITE_COUNT] = {};
     lv_obj_t* targets[SatelliteService::SATELLITE_COUNT] = {};
     lv_obj_t* targetLabels[SatelliteService::SATELLITE_COUNT] = {};
+    lv_point_t targetArrowPoints[SatelliteService::SATELLITE_COUNT][5] = {};
     HeaderBar headerBar;
     HeaderBar detailHeaderBar;
     lv_obj_t* detailScreen = nullptr;

@@ -46,6 +46,13 @@ struct AppSettings
     String wifiPassword;
     String hostname;
 
+    // WSJT-X contact lookup. Provider 0 is HamQTH; provider 1 is QRZ.
+    uint8_t callsignLookupProvider = 0;
+    String callsignLookupUsername;
+    String callsignLookupPassword;
+    String wsjtxMulticastAddress = "239.255.0.0";
+    uint16_t wsjtxUdpPort = 2237;
+
 
     // --------------------------------------------------------
     // Display

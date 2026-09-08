@@ -6,12 +6,15 @@
 namespace
 {
     constexpr const char* BAND_NAMES[LiveSpotsService::BAND_COUNT] =
-        {"80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m"};
+        {"80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m"};
     constexpr double EARTH_RADIUS_KM = 6371.0;
 }
 
 void LiveSpotsService::begin(const AppSettings& settings)
 {
+    callsign = settings.callsign;
+    callsign.trim();
+    callsign.toUpperCase();
     gridSquare = settings.gridSquare;
     gridSquare.trim();
     if (gridSquare.length() >= 2)
@@ -35,10 +38,17 @@ void LiveSpotsService::begin(const AppSettings& settings)
     for (uint8_t i = 0; i < BAND_COUNT; ++i) bands[i].name = BAND_NAMES[i];
     recentSpotCount = 0;
     totalSpotCount = 0;
+    signalReachCount = 0;
+    signalReportCount = 0;
+    signalFarthestKm = 0.0f;
+    signalFarthestCall = "";
+    dataRevision = 0;
     nextUpdateMs = 0;
     valid = false;
+    signalReachValid = false;
     updating = false;
     lastError = "";
+    signalReachError = "";
 }
 
 void LiveSpotsService::update()
@@ -76,12 +86,75 @@ bool LiveSpotsService::fetchReports()
     http.end();
     if (xml.indexOf("<receptionReports") < 0) { lastError = "Invalid PSK Reporter data"; return false; }
     parseReports(xml);
+    fetchSignalReports();
     lastError = "";
     Serial.print("[LiveSpotsService] Parsed ");
     Serial.print(totalSpotCount);
     Serial.print(" ");
     Serial.print(gridSquare);
     Serial.println(" reports");
+    ++dataRevision;
+    return true;
+}
+
+bool LiveSpotsService::fetchSignalReports()
+{
+    if (callsign.isEmpty())
+    {
+        signalReachError = "SET CALLSIGN IN SETTINGS";
+        signalReachValid = false;
+        return false;
+    }
+
+    String encodedCallsign = callsign;
+    encodedCallsign.replace("/", "%2F");
+    const String url =
+        String("https://retrieve.pskreporter.info/query?senderCallsign=") +
+        encodedCallsign +
+        "&flowStartSeconds=-1800&rptlimit=100&rronly=1";
+
+    HTTPClient http;
+    http.setConnectTimeout(REQUEST_TIMEOUT_MS);
+    http.setTimeout(REQUEST_TIMEOUT_MS);
+    http.setUserAgent("MissionControl-ESP32/1.0");
+    if (!http.begin(url))
+    {
+        signalReachError = "UNABLE TO START MY SIGNAL QUERY";
+        return false;
+    }
+
+    const int response = http.GET();
+    if (response < 200 || response >= 300)
+    {
+        signalReachError = String("MY SIGNAL HTTP ") + response;
+        http.end();
+        return false;
+    }
+
+    const int size = http.getSize();
+    if (size > 160 * 1024)
+    {
+        signalReachError = "MY SIGNAL RESPONSE TOO LARGE";
+        http.end();
+        return false;
+    }
+
+    String xml = http.getString();
+    http.end();
+    if (xml.indexOf("<receptionReports") < 0)
+    {
+        signalReachError = "INVALID MY SIGNAL DATA";
+        return false;
+    }
+
+    parseSignalReports(xml);
+    signalReachError = "";
+    signalReachValid = true;
+    Serial.print("[LiveSpotsService] My signal heard by ");
+    Serial.print(signalReachCount);
+    Serial.print(" receivers in the last 30 minutes (");
+    Serial.print(signalReportCount);
+    Serial.println(" reports)");
     return true;
 }
 
@@ -132,6 +205,85 @@ void LiveSpotsService::parseReports(const String& xml)
     }
 }
 
+void LiveSpotsService::parseSignalReports(const String& xml)
+{
+    signalReachCount = 0;
+    signalReportCount = 0;
+    signalFarthestKm = 0.0f;
+    signalFarthestCall = "";
+
+    int position = 0;
+    while ((position = xml.indexOf("<receptionReport ", position)) >= 0)
+    {
+        const int end = xml.indexOf("/>", position);
+        if (end < 0) break;
+        const String tag = xml.substring(position, end + 2);
+        position = end + 2;
+
+        const uint32_t frequency = static_cast<uint32_t>(
+            attribute(tag, "frequency").toInt());
+        const int8_t index = bandIndex(frequency);
+        if (index < 0) continue;
+
+        const String receiver = attribute(tag, "receiverCallsign");
+        const String receiverGrid = attribute(tag, "receiverLocator");
+        if (receiverGrid.isEmpty()) continue;
+
+        double receiverLatitude = 0.0;
+        double receiverLongitude = 0.0;
+        if (!gridToCoordinates(
+                receiverGrid, receiverLatitude, receiverLongitude))
+            continue;
+
+        const float distance = distanceFromHome(receiverGrid);
+        const float bearing = bearingFromHome(receiverGrid);
+        const uint32_t timestamp = static_cast<uint32_t>(
+            attribute(tag, "flowStartSeconds").toInt());
+        ++signalReportCount;
+
+        int8_t existing = -1;
+        for (uint8_t spot = 0; spot < signalReachCount; ++spot)
+        {
+            if ((!receiver.isEmpty() &&
+                 signalSpots[spot].receiverCallsign == receiver) ||
+                signalSpots[spot].receiverLocator == receiverGrid)
+            {
+                existing = static_cast<int8_t>(spot);
+                break;
+            }
+        }
+
+        uint8_t destinationIndex;
+        if (existing >= 0)
+        {
+            destinationIndex = static_cast<uint8_t>(existing);
+            if (timestamp < signalSpots[destinationIndex].timestamp) continue;
+        }
+        else
+        {
+            if (signalReachCount >= MAX_SIGNAL_SPOTS) continue;
+            destinationIndex = signalReachCount++;
+        }
+
+        SignalReachSpot& destination = signalSpots[destinationIndex];
+        destination.receiverCallsign = receiver;
+        destination.receiverLocator = receiverGrid;
+        destination.latitude = static_cast<float>(receiverLatitude);
+        destination.longitude = static_cast<float>(receiverLongitude);
+        destination.distanceKm = distance;
+        destination.bearingDegrees = bearing;
+        destination.snr = attribute(tag, "sNR").toInt();
+        destination.timestamp = timestamp;
+        destination.bandIndex = static_cast<uint8_t>(index);
+
+        if (distance > signalFarthestKm)
+        {
+            signalFarthestKm = distance;
+            signalFarthestCall = receiver;
+        }
+    }
+}
+
 String LiveSpotsService::attribute(const String& tag, const char* name)
 {
     const String prefix = String(name) + "=\"";
@@ -153,6 +305,7 @@ int8_t LiveSpotsService::bandIndex(uint32_t hz)
     if (hz >= 21000000 && hz <= 21450000) return 6;
     if (hz >= 24890000 && hz <= 24990000) return 7;
     if (hz >= 28000000 && hz <= 29700000) return 8;
+    if (hz >= 50000000 && hz <= 54000000) return 9;
     return -1;
 }
 
@@ -186,6 +339,21 @@ float LiveSpotsService::distanceFromHome(const String& grid) const
     return static_cast<float>(EARTH_RADIUS_KM * 2 * atan2(sqrt(a), sqrt(1 - a)));
 }
 
+float LiveSpotsService::bearingFromHome(const String& grid) const
+{
+    double lat = 0.0, lon = 0.0;
+    if (!gridToCoordinates(grid, lat, lon)) return 0.0f;
+    const double lat1 = homeLatitude * DEG_TO_RAD;
+    const double lat2 = lat * DEG_TO_RAD;
+    const double dLon = (lon - homeLongitude) * DEG_TO_RAD;
+    const double y = sin(dLon) * cos(lat2);
+    const double x = cos(lat1) * sin(lat2) -
+        sin(lat1) * cos(lat2) * cos(dLon);
+    double bearing = atan2(y, x) / DEG_TO_RAD;
+    if (bearing < 0.0) bearing += 360.0;
+    return static_cast<float>(bearing);
+}
+
 bool LiveSpotsService::isValid() const { return valid; }
 bool LiveSpotsService::isUpdating() const { return updating; }
 const BandSpotSummary& LiveSpotsService::getBand(uint8_t index) const { return bands[index]; }
@@ -194,4 +362,20 @@ uint8_t LiveSpotsService::getRecentSpotCount() const { return recentSpotCount; }
 uint16_t LiveSpotsService::getTotalSpotCount() const { return totalSpotCount; }
 const String& LiveSpotsService::getLastError() const { return lastError; }
 const String& LiveSpotsService::getGridSquare() const { return gridSquare; }
+uint32_t LiveSpotsService::getDataRevision() const { return dataRevision; }
+const String& LiveSpotsService::getCallsign() const { return callsign; }
+bool LiveSpotsService::isSignalReachValid() const { return signalReachValid; }
+const String& LiveSpotsService::getSignalReachError() const { return signalReachError; }
+uint8_t LiveSpotsService::getSignalReachCount() const { return signalReachCount; }
+uint16_t LiveSpotsService::getSignalReportCount() const { return signalReportCount; }
+const SignalReachSpot& LiveSpotsService::getSignalReachSpot(uint8_t index) const { return signalSpots[index]; }
+float LiveSpotsService::getSignalFarthestKm() const { return signalFarthestKm; }
+const String& LiveSpotsService::getSignalFarthestCall() const { return signalFarthestCall; }
+uint32_t LiveSpotsService::getSecondsUntilNextUpdate() const
+{
+    if (nextUpdateMs == 0 || timeReached(nextUpdateMs)) return 0;
+    return static_cast<uint32_t>(nextUpdateMs - millis()) / 1000UL;
+}
+double LiveSpotsService::getHomeLatitude() const { return homeLatitude; }
+double LiveSpotsService::getHomeLongitude() const { return homeLongitude; }
 bool LiveSpotsService::timeReached(unsigned long target) { return static_cast<long>(millis() - target) >= 0; }

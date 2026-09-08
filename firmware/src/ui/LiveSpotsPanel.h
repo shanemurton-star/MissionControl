@@ -17,5 +17,5 @@ private:
     lv_obj_t* panel = nullptr;
     lv_obj_t* totalLabel = nullptr;
     lv_obj_t* bandsLabel = nullptr;
-    lv_obj_t* bandCells[9] = {};
+    lv_obj_t* bandCells[LiveSpotsService::BAND_COUNT] = {};
 };

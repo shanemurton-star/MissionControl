@@ -9,6 +9,7 @@ struct AircraftData
     String registration;
     String type;
     String description;
+    String operatorName;
     String category;
     String emergency;
     String squawk;

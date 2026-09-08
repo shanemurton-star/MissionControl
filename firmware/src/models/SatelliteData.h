@@ -28,6 +28,8 @@ struct SatelliteData
     float losAzimuth = 0.0f;
     float currentAzimuth = 0.0f;
     float currentElevation = -90.0f;
+    float futureAzimuth = 0.0f;
+    float futureElevation = -90.0f;
     float rangeKm = 0.0f;
     bool visible = false;
     bool valid = false;

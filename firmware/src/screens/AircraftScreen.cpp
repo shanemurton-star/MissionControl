@@ -331,6 +331,14 @@ void AircraftScreen::begin(ClockService& clockService, AircraftService& service)
     lv_label_set_long_mode(detailFlightLabel, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_align(detailFlightLabel, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
+    detailRouteLabel = Theme::createLabel(
+        identityPanel, "", Theme::COLOR_PRIMARY, &lv_font_montserrat_14);
+    lv_obj_set_pos(detailRouteLabel, 0, 88);
+    lv_obj_set_size(detailRouteLabel, 282, 58);
+    lv_label_set_long_mode(detailRouteLabel, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(
+        detailRouteLabel, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+
     detailArtworkImage = lv_img_create(identityPanel);
     lv_obj_clear_flag(detailArtworkImage, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_flag(detailArtworkImage, LV_OBJ_FLAG_HIDDEN);
@@ -380,7 +388,7 @@ void AircraftScreen::release()
     if (screen != nullptr) { lv_obj_del(screen); screen = nullptr; }
     countLabel = statusLabel = listLabel = aircraftListScroller = nullptr;
     radarScope = radarPositionLabel = nullptr;
-    detailIdentityLabel = detailFlightLabel = detailPositionLabel = nullptr;
+    detailIdentityLabel = detailFlightLabel = detailRouteLabel = detailPositionLabel = nullptr;
     detailArtworkImage = nullptr;
     detailArtworkStatusLabel = nullptr;
     for (uint8_t i = 0; i < 7; ++i) detailMetricLabels[i] = nullptr;
@@ -626,6 +634,8 @@ void AircraftScreen::showAircraftDetail(uint8_t index)
     if (aircraftService == nullptr || index >= aircraftService->getAircraftCount()) return;
     selectedAircraftHex = aircraftService->getAircraft(index).hex;
     displayedArtworkHex = "";
+    aircraftService->requestRouteData(
+        aircraftService->getAircraft(index).callsign);
     updateDetail();
     lv_scr_load(detailScreen);
 }
@@ -657,6 +667,41 @@ void AircraftScreen::updateDetail()
         : (!selected->type.isEmpty() ? selected->type : "AIRCRAFT TYPE UNAVAILABLE");
     lv_label_set_text(detailIdentityLabel, tailNumber.c_str());
     lv_label_set_text(detailFlightLabel, aircraftType.c_str());
+
+    String operatorName = selected->operatorName;
+    String routeText;
+    if (aircraftService->hasRouteResultFor(selected->callsign))
+    {
+        if (!aircraftService->getRouteAirline().isEmpty())
+            operatorName = aircraftService->getRouteAirline();
+        if (aircraftService->isRouteAvailable())
+        {
+            String origin = aircraftService->getRouteOriginCity();
+            if (!aircraftService->getRouteOriginCode().isEmpty())
+                origin += (origin.isEmpty() ? "" : " ") +
+                    String("(") + aircraftService->getRouteOriginCode() + ")";
+            String destination = aircraftService->getRouteDestinationCity();
+            if (!aircraftService->getRouteDestinationCode().isEmpty())
+                destination += (destination.isEmpty() ? "" : " ") +
+                    String("(") + aircraftService->getRouteDestinationCode() + ")";
+            routeText = "FROM " + origin + "\nTO " + destination;
+        }
+        else
+        {
+            routeText = aircraftService->getRouteError();
+        }
+    }
+    else if (aircraftService->isRouteLookupPending())
+    {
+        routeText = "LOOKING UP FLIGHT ROUTE...";
+    }
+    else
+    {
+        routeText = "ROUTE INFORMATION UNAVAILABLE";
+    }
+    if (!operatorName.isEmpty())
+        routeText = operatorName + "\n" + routeText;
+    lv_label_set_text(detailRouteLabel, routeText.c_str());
     updateAircraftArtwork();
 
     const String altitude = selected->onGround

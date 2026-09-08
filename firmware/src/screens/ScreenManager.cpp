@@ -24,6 +24,7 @@ void ScreenManager::begin(
     SolarService& solarService,
     LiveSpotsService& liveSpotsService,
     PotaService& potaService,
+    WsjtxService& wsjtxService,
     SettingsService& settingsService,
     WiFiService& wifiService)
 {
@@ -36,6 +37,7 @@ void ScreenManager::begin(
     this->settingsService = &settingsService;
     this->wifiService = &wifiService;
     this->potaService = &potaService;
+    this->wsjtxService = &wsjtxService;
 
     HeaderBar::configureSettings(settingsService.get());
     Serial.println("[UI] Startup screen...");
@@ -117,11 +119,27 @@ void ScreenManager::showLiveSpotsScreen()
     liveSpotsScreen.setNavigationCallback([this](Page page) { handleNavigation(page); });
     liveSpotsScreen.show();
 }
+void ScreenManager::showSignalReachScreen()
+{
+    signalReachScreen.begin(*clockService, *liveSpotsService);
+    signalReachScreen.setNavigationCallback(
+        [this](Page page) { handleNavigation(page); });
+    signalReachScreen.show();
+}
 void ScreenManager::showSettingsScreen()
 {
-    settingsScreen.begin(*clockService, *settingsService, *wifiService, *liveSpotsService);
+    settingsScreen.begin(
+        *clockService, *settingsService, *wifiService,
+        *liveSpotsService, *wsjtxService);
     settingsScreen.setNavigationCallback([this](Page page) { handleNavigation(page); });
     settingsScreen.show();
+}
+void ScreenManager::showCallsignLookupScreen()
+{
+    callsignLookupScreen.begin(*clockService, *settingsService, *wsjtxService);
+    callsignLookupScreen.setNavigationCallback(
+        [this](Page page) { handleNavigation(page); });
+    callsignLookupScreen.show();
 }
 void ScreenManager::showPotaScreen()
 {
@@ -162,6 +180,12 @@ void ScreenManager::handleNavigation(
         case Page::LiveSpots:
             showLiveSpotsScreen();
             break;
+        case Page::SignalReach:
+            showSignalReachScreen();
+            break;
+        case Page::CallsignLookup:
+            showCallsignLookupScreen();
+            break;
         case Page::Settings:
             showSettingsScreen();
             break;
@@ -190,6 +214,8 @@ void ScreenManager::releaseDetailScreen(Page page)
         case Page::Satellite: satelliteScreen.release(); break;
         case Page::Solar: solarScreen.release(); break;
         case Page::LiveSpots: liveSpotsScreen.release(); break;
+        case Page::SignalReach: signalReachScreen.release(); break;
+        case Page::CallsignLookup: callsignLookupScreen.release(); break;
         case Page::Settings: settingsScreen.release(); break;
         case Page::Pota: potaScreen.release(); break;
         default: break;
