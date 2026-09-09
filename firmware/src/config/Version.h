@@ -2,5 +2,5 @@
 
 namespace Version
 {
-    constexpr const char* FIRMWARE = "v1.0.2";
+    constexpr const char* FIRMWARE = "v1.1.0";
 }

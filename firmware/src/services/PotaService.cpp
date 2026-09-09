@@ -244,7 +244,7 @@ void PotaService::fetchNextMapTile()
     http.setConnectTimeout(REQUEST_TIMEOUT_MS);
     http.setTimeout(REQUEST_TIMEOUT_MS);
     http.setUserAgent(
-        "MissionControl-ESP32/1.0.2 (+https://github.com/shanemurton-star/MissionControl)");
+        "MissionControl-ESP32/1.1.0 (+https://github.com/shanemurton-star/MissionControl)");
 
     Serial.print("[PotaService] Fetching map tile ");
     Serial.print(index + 1);

@@ -298,7 +298,7 @@ bool WsjtxService::httpGet(const String& url, String& response, int& responseCod
     HTTPClient http;
     http.setConnectTimeout(8000);
     http.setTimeout(8000);
-    http.setUserAgent("MissionControl-ESP32/1.0.2");
+    http.setUserAgent("MissionControl-ESP32/1.1.0");
     if (!http.begin(client, url))
     {
         responseCode = -1;
@@ -381,7 +381,7 @@ bool WsjtxService::lookupQrz(const String& targetCallsign)
         const String loginUrl = "https://xmldata.qrz.com/xml/current/?username=" +
             urlEncode(configuration.callsignLookupUsername) + ";password=" +
             urlEncode(configuration.callsignLookupPassword) +
-            ";agent=MissionControl-1.0.2";
+            ";agent=MissionControl-1.1.0";
         if (!httpGet(loginUrl, xml, code))
         {
             lookupStatus = "QRZ LOGIN HTTP " + String(code);
@@ -436,7 +436,7 @@ bool WsjtxService::downloadImage(
     http.setConnectTimeout(8000);
     http.setTimeout(10000);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.setUserAgent("MissionControl-ESP32/1.0.2");
+    http.setUserAgent("MissionControl-ESP32/1.1.0");
     if (!http.begin(client, url)) { error = "IMAGE REQUEST FAILED"; return false; }
     const int code = http.GET();
     if (code < 200 || code >= 300)
