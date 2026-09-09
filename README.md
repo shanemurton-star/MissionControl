@@ -12,7 +12,7 @@ A custom ESP32-S3 dashboard combining:
 - Satellite tracking
 - Flight tracking
 - POTA Spots
-- Live Spots
+- Live Spots (includes PSK signal reach & FT8 contact lookup)
 ## Hardware
 
 Planned:
